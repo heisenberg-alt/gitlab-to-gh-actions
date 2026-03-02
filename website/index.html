@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gl2gh - GitLab CI/CD to GitHub Actions Migration Tool</title>
+    <meta name="description" content="Migrate your GitLab CI/CD pipelines to GitHub Actions with confidence. Rule-based conversion with optional AI enhancement powered by Claude.">
+    <style>
+        /* ============================================================
+           Reset and Base
+           ============================================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #1c2128;
+            --bg-card: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #bc8cff;
+            --accent-orange: #d29922;
+            --accent-pink: #f778ba;
+            --gradient-start: #1a1f36;
+            --gradient-end: #0d1117;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* ============================================================
+           Layout
+           ============================================================ */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        section {
+            padding: 80px 0;
+        }
+
+        /* ============================================================
+           Navigation
+           ============================================================ */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .nav-logo span {
+            color: var(--accent-blue);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        /* ============================================================
+           Hero
+           ============================================================ */
+        .hero {
+            padding: 160px 0 100px;
+            text-align: center;
+            background: linear-gradient(180deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 600px;
+            background: radial-gradient(ellipse at center, rgba(88, 166, 255, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+            background: var(--bg-secondary);
+        }
+
+        .hero-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+        }
+
+        .hero h1 {
+            font-size: 56px;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -1.5px;
+            margin-bottom: 24px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero h1 .highlight {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 20px;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #79c0ff;
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        /* ============================================================
+           Features
+           ============================================================ */
+        .features {
+            background: var(--bg-primary);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+
+        .section-header h2 {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+        }
+
+        .section-header p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 32px;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--text-muted);
+            transform: translateY(-2px);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .feature-icon.blue { background: rgba(88, 166, 255, 0.12); color: var(--accent-blue); }
+        .feature-icon.green { background: rgba(63, 185, 80, 0.12); color: var(--accent-green); }
+        .feature-icon.purple { background: rgba(188, 140, 255, 0.12); color: var(--accent-purple); }
+        .feature-icon.orange { background: rgba(210, 153, 34, 0.12); color: var(--accent-orange); }
+
+        .feature-card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        /* ============================================================
+           How It Works
+           ============================================================ */
+        .how-it-works {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 48px;
+            margin-top: 48px;
+        }
+
+        .step {
+            text-align: center;
+        }
+
+        .step-number {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: #fff;
+            font-size: 22px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+        }
+
+        .step h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .step p {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        /* ============================================================
+           Code Snippet
+           ============================================================ */
+        .quickstart {
+            background: var(--bg-primary);
+        }
+
+        .code-block {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        .code-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .code-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .code-dot.red { background: #ff5f57; }
+        .code-dot.yellow { background: #febc2e; }
+        .code-dot.green { background: #28c840; }
+
+        .code-title {
+            margin-left: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .code-block pre {
+            padding: 24px;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 14px;
+            line-height: 1.8;
+            color: var(--text-primary);
+        }
+
+        .code-block .comment { color: var(--text-muted); }
+        .code-block .command { color: var(--accent-green); }
+        .code-block .flag { color: var(--accent-orange); }
+        .code-block .arg { color: var(--accent-blue); }
+
+        /* ============================================================
+           Mapping Table
+           ============================================================ */
+        .mapping {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .mapping-table-wrapper {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .mapping-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .mapping-table th {
+            background: var(--bg-tertiary);
+            padding: 14px 20px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .mapping-table td {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .mapping-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .mapping-table code {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            background: var(--bg-primary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: var(--accent-blue);
+        }
+
+        /* ============================================================
+           Pricing (Free & Open Source)
+           ============================================================ */
+        .pricing {
+            background: var(--bg-primary);
+        }
+
+        .pricing-card {
+            max-width: 480px;
+            margin: 0 auto;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 48px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pricing-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple), var(--accent-pink));
+        }
+
+        .pricing-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(63, 185, 80, 0.12);
+            color: var(--accent-green);
+            margin-bottom: 24px;
+        }
+
+        .pricing-price {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .pricing-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .pricing-features {
+            list-style: none;
+            text-align: left;
+            margin-bottom: 32px;
+        }
+
+        .pricing-features li {
+            padding: 10px 0;
+            font-size: 15px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pricing-features li::before {
+            content: "";
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(63, 185, 80, 0.12);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%233fb950' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 12px;
+        }
+
+        /* ============================================================
+           Footer
+           ============================================================ */
+        footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 48px 0;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+
+        .footer-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .footer-logo span {
+            color: var(--accent-blue);
+        }
+
+        .footer-text {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .footer-links a:hover {
+            color: var(--text-primary);
+        }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 768px) {
+            .hero {
+                padding: 120px 0 64px;
+            }
+
+            .hero h1 {
+                font-size: 36px;
+            }
+
+            .hero p {
+                font-size: 17px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            section {
+                padding: 56px 0;
+            }
+
+            .section-header h2 {
+                font-size: 28px;
+            }
+
+            .steps {
+                gap: 32px;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="container">
+            <div class="nav-logo"><span>gl</span>2gh</div>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how-it-works">How It Works</a></li>
+                <li><a href="#quickstart">Quick Start</a></li>
+                <li><a href="#mapping">Mapping</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="https://github.com/your-org/gl2gh">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-badge">
+                <span class="dot"></span>
+                v1.0.0 -- Production Ready
+            </div>
+            <h1>Migrate from GitLab CI to <span class="highlight">GitHub Actions</span></h1>
+            <p>
+                A production-grade CLI tool that converts your GitLab CI/CD pipelines
+                to GitHub Actions workflows. Rule-based conversion with optional
+                AI enhancement powered by Claude.
+            </p>
+            <div class="hero-buttons">
+                <a href="#quickstart" class="btn btn-primary">Get Started</a>
+                <a href="https://github.com/your-org/gl2gh" class="btn btn-secondary">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Everything you need to migrate</h2>
+                <p>
+                    From simple pipelines to complex multi-stage deployments,
+                    gl2gh handles the conversion so you can focus on shipping.
+                </p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon blue">&#x2699;</div>
+                    <h3>Rule-Based Converter</h3>
+                    <p>
+                        Deterministic mapping of 30+ GitLab CI features to GitHub Actions.
+                        Handles stages, variables, cache, artifacts, services, environments,
+                        matrix builds, and more with zero configuration.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon purple">&#x2728;</div>
+                    <h3>AI-Enhanced Migration</h3>
+                    <p>
+                        Optional Claude-powered agent for complex patterns. Handles
+                        advanced rules conditions, multi-project pipelines, template
+                        resolution, and edge cases that pure rules cannot cover.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon green">&#x25B6;</div>
+                    <h3>Powerful CLI</h3>
+                    <p>
+                        Five commands for the full migration workflow: migrate, inspect,
+                        validate, migrate-repo, and gh-status. Rich terminal output
+                        with syntax highlighting, tables, and progress indicators.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon orange">&#x21C4;</div>
+                    <h3>Repository Migration</h3>
+                    <p>
+                        End-to-end repository migration from GitLab to GitHub.
+                        Integrates with the GitHub CLI for repo creation, workflow
+                        management, and deployment verification.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <h2>How it works</h2>
+                <p>Three steps to migrate your CI/CD pipeline.</p>
+            </div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Inspect</h3>
+                    <p>
+                        Analyze your GitLab CI pipeline to understand its structure:
+                        stages, jobs, templates, services, and variables. Identify
+                        complex patterns before converting.
+                    </p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Migrate</h3>
+                    <p>
+                        Run the converter to generate GitHub Actions workflow files.
+                        Use rule-based mode for speed, or enable AI enhancement
+                        for complex pipelines.
+                    </p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Validate</h3>
+                    <p>
+                        Check the generated workflows for correctness, security
+                        issues, and best practices. Push to GitHub and verify
+                        your workflows run successfully.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Start -->
+    <section class="quickstart" id="quickstart">
+        <div class="container">
+            <div class="section-header">
+                <h2>Quick start</h2>
+                <p>Install and run your first migration in under a minute.</p>
+            </div>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-dot red"></span>
+                    <span class="code-dot yellow"></span>
+                    <span class="code-dot green"></span>
+                    <span class="code-title">Terminal</span>
+                </div>
+                <pre><span class="comment"># Install gl2gh</span>
+<span class="command">pip install</span> <span class="flag">-e</span> <span class="arg">".[dev]"</span>
+
+<span class="comment"># Inspect your pipeline</span>
+<span class="command">gl2gh inspect</span> <span class="arg">.gitlab-ci.yml</span> <span class="flag">-v</span>
+
+<span class="comment"># Preview the conversion (dry run)</span>
+<span class="command">gl2gh migrate</span> <span class="arg">.gitlab-ci.yml</span> <span class="flag">--dry-run</span>
+
+<span class="comment"># Run the migration</span>
+<span class="command">gl2gh migrate</span> <span class="arg">.gitlab-ci.yml</span> <span class="flag">-o</span> <span class="arg">.github/workflows</span>
+
+<span class="comment"># Validate the output</span>
+<span class="command">gl2gh validate</span> <span class="arg">.github/workflows/</span>
+
+<span class="comment"># (Optional) AI-enhanced migration</span>
+<span class="command">export</span> ANTHROPIC_API_KEY=<span class="arg">"sk-ant-..."</span>
+<span class="command">gl2gh migrate</span> <span class="arg">.gitlab-ci.yml</span> <span class="flag">--ai</span></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Mapping Table -->
+    <section class="mapping" id="mapping">
+        <div class="container">
+            <div class="section-header">
+                <h2>Feature mapping</h2>
+                <p>See how GitLab CI concepts translate to GitHub Actions.</p>
+            </div>
+            <div class="mapping-table-wrapper">
+                <table class="mapping-table">
+                    <thead>
+                        <tr>
+                            <th>GitLab CI/CD</th>
+                            <th>GitHub Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>stages</code></td>
+                            <td><code>needs</code> dependency graph</td>
+                        </tr>
+                        <tr>
+                            <td><code>image</code></td>
+                            <td><code>container.image</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>services</code></td>
+                            <td><code>services</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>variables</code></td>
+                            <td><code>env</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>cache</code></td>
+                            <td><code>actions/cache@v4</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>artifacts</code></td>
+                            <td><code>actions/upload-artifact@v4</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>parallel.matrix</code></td>
+                            <td><code>strategy.matrix</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>rules</code></td>
+                            <td><code>if</code> conditions</td>
+                        </tr>
+                        <tr>
+                            <td><code>environment</code></td>
+                            <td><code>environment</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>allow_failure</code></td>
+                            <td><code>continue-on-error</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>$CI_COMMIT_SHA</code></td>
+                            <td><code>${{ github.sha }}</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>$CI_REGISTRY_IMAGE</code></td>
+                            <td><code>ghcr.io/${{ github.repository }}</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="container">
+            <div class="section-header">
+                <h2>Free and open source</h2>
+                <p>gl2gh is MIT licensed. No subscriptions, no limits.</p>
+            </div>
+            <div class="pricing-card">
+                <div class="pricing-badge">Open Source</div>
+                <div class="pricing-price">$0</div>
+                <div class="pricing-subtitle">Free forever. MIT License.</div>
+                <ul class="pricing-features">
+                    <li>Rule-based conversion for all supported features</li>
+                    <li>Full CLI with inspect, migrate, and validate commands</li>
+                    <li>30+ GitLab CI variable translations</li>
+                    <li>GitHub CLI integration for repository operations</li>
+                    <li>AI-enhanced mode (bring your own API key)</li>
+                    <li>Validation and optimization agents</li>
+                    <li>Comprehensive documentation and examples</li>
+                    <li>Community support via GitHub Issues</li>
+                </ul>
+                <a href="https://github.com/your-org/gl2gh" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                    Get Started on GitHub
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <div class="footer-logo"><span>gl</span>2gh</div>
+                    <div class="footer-text" style="margin-top: 8px;">
+                        GitLab CI/CD to GitHub Actions migration tool.
+                    </div>
+                </div>
+                <ul class="footer-links">
+                    <li><a href="https://github.com/your-org/gl2gh">GitHub</a></li>
+                    <li><a href="https://github.com/your-org/gl2gh/blob/main/docs/MIGRATION_GUIDE.md">Documentation</a></li>
+                    <li><a href="https://github.com/your-org/gl2gh/issues">Issues</a></li>
+                    <li><a href="https://github.com/your-org/gl2gh/blob/main/LICENSE">MIT License</a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gl2gh — GitLab CI/CD to GitHub Actions Migration Tool</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #0f172a;
+            --bg-light: #1e293b;
+            --bg-card: #334155;
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --accent: #38bdf8;
+            --green: #4ade80;
+            --orange: #fb923c;
+            --purple: #a78bfa;
+            --border: #475569;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        code {
+            background: var(--bg-card);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+        }
+
+        /* Nav */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        nav .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        nav .links { display: flex; gap: 2rem; }
+        nav .links a { color: var(--text-dim); font-size: 0.95rem; }
+        nav .links a:hover { color: var(--text); text-decoration: none; }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 6rem 2rem 4rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .hero .badge {
+            display: inline-block;
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            padding: 0.4rem 1rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+        }
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+        }
+        .hero h1 .gradient {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            max-width: 650px;
+            margin: 0 auto 2rem;
+        }
+        .hero .cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover { background: var(--primary-dark); text-decoration: none; }
+        .btn-secondary {
+            background: var(--bg-light);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
+
+        /* Terminal */
+        .terminal {
+            max-width: 700px;
+            margin: 3rem auto 0;
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .terminal-bar {
+            display: flex;
+            gap: 6px;
+            padding: 12px 16px;
+            background: var(--bg-card);
+        }
+        .terminal-bar .dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+        }
+        .terminal-bar .dot.red { background: #ef4444; }
+        .terminal-bar .dot.yellow { background: #eab308; }
+        .terminal-bar .dot.green { background: #22c55e; }
+        .terminal-body {
+            padding: 1.25rem;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 0.875rem;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+        .terminal-body .prompt { color: var(--green); }
+        .terminal-body .cmd { color: var(--text); }
+        .terminal-body .output { color: var(--text-dim); }
+        .terminal-body .highlight { color: var(--accent); }
+
+        /* Features */
+        .features {
+            max-width: 1200px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+        .features h2 {
+            text-align: center;
+            font-size: 2.25rem;
+            margin-bottom: 3rem;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+        .feature-card {
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: border-color 0.2s;
+        }
+        .feature-card:hover { border-color: var(--accent); }
+        .feature-card .icon {
+            font-size: 2rem;
+            margin-bottom: 0.75rem;
+        }
+        .feature-card h3 {
+            font-size: 1.15rem;
+            margin-bottom: 0.5rem;
+        }
+        .feature-card p {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+
+        /* Mapping table */
+        .mapping {
+            max-width: 900px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+        .mapping h2 {
+            text-align: center;
+            font-size: 2.25rem;
+            margin-bottom: 1rem;
+        }
+        .mapping .subtitle {
+            text-align: center;
+            color: var(--text-dim);
+            margin-bottom: 2.5rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-light);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        th {
+            background: var(--bg-card);
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        td {
+            padding: 0.65rem 1rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+        td code { background: rgba(56,189,248,0.1); color: var(--accent); }
+        .arrow { color: var(--text-dim); text-align: center; }
+
+        /* How it works */
+        .how-it-works {
+            max-width: 900px;
+            margin: 6rem auto;
+            padding: 0 2rem;
+        }
+        .how-it-works h2 {
+            text-align: center;
+            font-size: 2.25rem;
+            margin-bottom: 3rem;
+        }
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .step {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+        .step-number {
+            flex-shrink: 0;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        .step-content h3 { margin-bottom: 0.25rem; }
+        .step-content p { color: var(--text-dim); font-size: 0.95rem; }
+        .step-content code { font-size: 0.85rem; }
+
+        /* CTA */
+        .cta-section {
+            text-align: center;
+            padding: 5rem 2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .cta-section h2 {
+            font-size: 2.25rem;
+            margin-bottom: 1rem;
+        }
+        .cta-section p {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.25rem; }
+            .hero p { font-size: 1.05rem; }
+            nav .links { gap: 1rem; }
+            .features-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="logo">gl2gh</div>
+    <div class="links">
+        <a href="#features">Features</a>
+        <a href="#mapping">Mapping</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="https://github.com/your-org/gl2gh">GitHub</a>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="badge">Open Source CLI Tool</div>
+    <h1>Migrate GitLab CI/CD to<br><span class="gradient">GitHub Actions</span></h1>
+    <p>Convert your GitLab CI pipelines to GitHub Actions workflows in seconds. Rule-based conversion with optional AI-enhanced mode powered by Claude.</p>
+    <div class="cta">
+        <a href="#how-it-works" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/your-org/gl2gh" class="btn btn-secondary">View on GitHub</a>
+    </div>
+
+    <div class="terminal">
+        <div class="terminal-bar">
+            <div class="dot red"></div>
+            <div class="dot yellow"></div>
+            <div class="dot green"></div>
+        </div>
+        <div class="terminal-body">
+            <div><span class="prompt">$</span> <span class="cmd">pip install gl2gh</span></div>
+            <div><span class="prompt">$</span> <span class="cmd">gl2gh migrate .gitlab-ci.yml --dry-run</span></div>
+            <div class="output">&nbsp;</div>
+            <div class="output"><span class="highlight">gl2gh</span> — GitLab CI/CD -> GitHub Actions Migration Tool</div>
+            <div class="output">&nbsp;</div>
+            <div class="output">Reading: .gitlab-ci.yml</div>
+            <div class="output">Found 5 jobs across 4 stages</div>
+            <div class="output">&nbsp;</div>
+            <div class="output" style="color:#4ade80;">Conversion successful!</div>
+            <div class="output">&nbsp; Generated 1 workflow file(s):</div>
+            <div class="output">&nbsp;&nbsp;&nbsp; <span class="highlight">.github/workflows/ci.yml</span></div>
+        </div>
+    </div>
+</section>
+
+<section class="features" id="features">
+    <h2>Everything You Need</h2>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="icon">&#9889;</div>
+            <h3>Instant Conversion</h3>
+            <p>Rule-based converter handles 80%+ of GitLab CI patterns instantly. No API keys required for standard migrations.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">&#129302;</div>
+            <h3>AI-Enhanced Mode</h3>
+            <p>Claude Opus handles complex patterns: advanced rules, multi-project pipelines, custom runner configs, and more.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">&#128268;</div>
+            <h3>30+ Variable Mappings</h3>
+            <p>Automatic translation of <code>$CI_COMMIT_SHA</code>, <code>$CI_REGISTRY</code>, <code>$CI_PROJECT_PATH</code>, and 30+ other predefined variables.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">&#128640;</div>
+            <h3>GitHub CLI Integration</h3>
+            <p>Integrates with <code>gh</code> CLI for repo creation, workflow management, and GitHub Copilot CLI assistance.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">&#128736;</div>
+            <h3>Template Resolution</h3>
+            <p>Handles YAML anchors, <code>extends</code>, and hidden job templates (<code>.dot</code> prefix). Resolves inheritance before conversion.</p>
+        </div>
+        <div class="feature-card">
+            <div class="icon">&#9989;</div>
+            <h3>Validation</h3>
+            <p>Built-in validator checks generated workflows for correct structure, required fields, and valid job dependencies.</p>
+        </div>
+    </div>
+</section>
+
+<section class="mapping" id="mapping">
+    <h2>Comprehensive Mapping</h2>
+    <p class="subtitle">Every GitLab CI construct maps to its GitHub Actions equivalent</p>
+    <table>
+        <thead>
+            <tr>
+                <th>GitLab CI</th>
+                <th class="arrow"></th>
+                <th>GitHub Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td><code>stages</code> + job ordering</td><td class="arrow">&rarr;</td><td><code>needs</code> dependency graph</td></tr>
+            <tr><td><code>image</code></td><td class="arrow">&rarr;</td><td><code>container.image</code></td></tr>
+            <tr><td><code>services</code></td><td class="arrow">&rarr;</td><td><code>services</code></td></tr>
+            <tr><td><code>variables</code></td><td class="arrow">&rarr;</td><td><code>env</code></td></tr>
+            <tr><td><code>cache</code></td><td class="arrow">&rarr;</td><td><code>actions/cache@v4</code></td></tr>
+            <tr><td><code>artifacts</code></td><td class="arrow">&rarr;</td><td><code>actions/upload-artifact@v4</code></td></tr>
+            <tr><td><code>rules</code></td><td class="arrow">&rarr;</td><td><code>if</code> conditions</td></tr>
+            <tr><td><code>only/except</code></td><td class="arrow">&rarr;</td><td><code>on</code> triggers</td></tr>
+            <tr><td><code>parallel.matrix</code></td><td class="arrow">&rarr;</td><td><code>strategy.matrix</code></td></tr>
+            <tr><td><code>environment</code></td><td class="arrow">&rarr;</td><td><code>environment</code></td></tr>
+            <tr><td><code>allow_failure</code></td><td class="arrow">&rarr;</td><td><code>continue-on-error</code></td></tr>
+            <tr><td><code>timeout</code></td><td class="arrow">&rarr;</td><td><code>timeout-minutes</code></td></tr>
+            <tr><td><code>when: manual</code></td><td class="arrow">&rarr;</td><td><code>workflow_dispatch</code></td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="how-it-works" id="how-it-works">
+    <h2>Get Started in 4 Steps</h2>
+    <div class="steps">
+        <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>Install gl2gh</h3>
+                <p><code>pip install gl2gh</code> or clone the repository and run <code>pip install -e ".[dev]"</code></p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>Inspect Your Pipeline</h3>
+                <p>Run <code>gl2gh inspect .gitlab-ci.yml -v</code> to see your pipeline structure, jobs, stages, and templates.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>Migrate</h3>
+                <p>Run <code>gl2gh migrate .gitlab-ci.yml -o .github/workflows</code> to generate GitHub Actions workflows. Add <code>--ai</code> for complex pipelines.</p>
+            </div>
+        </div>
+        <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>Validate and Push</h3>
+                <p>Run <code>gl2gh validate .github/workflows/</code> then commit and push. Use <code>gh workflow run</code> to test.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <h2>Ready to Migrate?</h2>
+    <p>gl2gh is open source and free to use. The rule-based converter works instantly with no API keys. Enable AI mode for complex pipelines.</p>
+    <div class="cta">
+        <a href="https://github.com/your-org/gl2gh" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/your-org/gl2gh/blob/main/docs/MIGRATION_GUIDE.md" class="btn btn-secondary">Read the Guide</a>
+    </div>
+</section>
+
+<footer>
+    <p>gl2gh &mdash; Open source GitLab CI/CD to GitHub Actions migration tool. Built with Python, Click, and Claude.</p>
+</footer>
+
+</body>
+</html>

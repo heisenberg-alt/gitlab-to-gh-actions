@@ -1,0 +1,102 @@
+stages:
+  - build
+  - test
+  - security
+  - staging
+  - production
+
+variables:
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
+
+.python_base:
+  image: python:3.12
+  before_script:
+    - pip install -r requirements.txt
+  cache:
+    key:
+      files:
+        - requirements.txt
+    paths:
+      - .cache/pip
+
+build:
+  extends: .python_base
+  stage: build
+  script:
+    - python -m build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 30 days
+
+test:
+  extends: .python_base
+  stage: test
+  services:
+    - name: postgres:16
+      alias: db
+    - name: redis:7
+      alias: cache
+  variables:
+    DATABASE_URL: postgresql://postgres:postgres@db:5432/testdb
+    REDIS_URL: redis://cache:6379
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.10", "3.11", "3.12"]
+  script:
+    - pytest -v --junitxml=report.xml --cov=src
+  artifacts:
+    reports:
+      junit: report.xml
+      coverage: coverage.xml
+
+sast:
+  stage: security
+  image: python:3.12
+  script:
+    - pip install bandit safety
+    - bandit -r src/ -f json -o bandit-report.json
+    - safety check --json --output safety-report.json
+  artifacts:
+    paths:
+      - bandit-report.json
+      - safety-report.json
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+build_docker:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+  only:
+    - main
+    - tags
+
+deploy_staging:
+  stage: staging
+  script:
+    - echo "Deploying to staging..."
+  environment:
+    name: staging
+    url: https://staging.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+deploy_production:
+  stage: production
+  script:
+    - echo "Deploying to production..."
+  environment:
+    name: production
+    url: https://example.com
+  when: manual
+  only:
+    - main

@@ -1,0 +1,40 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  NODE_VERSION: "18"
+
+build:
+  stage: build
+  image: node:18
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+test:
+  stage: test
+  image: node:18
+  script:
+    - npm ci
+    - npm test
+  artifacts:
+    reports:
+      junit: test-results.xml
+
+deploy:
+  stage: deploy
+  image: node:18
+  script:
+    - npm ci
+    - npm run deploy
+  only:
+    - main
+  environment:
+    name: production
+    url: https://example.com

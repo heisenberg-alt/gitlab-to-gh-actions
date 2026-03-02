@@ -1,0 +1,79 @@
+stages:
+  - build
+  - test
+  - security
+  - deploy
+
+variables:
+  DOCKER_HOST: tcp://docker:2376
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+
+.base_job:
+  image: python:3.11
+  before_script:
+    - pip install -r requirements.txt
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .cache/pip
+      - venv/
+
+build:
+  extends: .base_job
+  stage: build
+  script:
+    - python setup.py build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 30 days
+
+test:
+  extends: .base_job
+  stage: test
+  services:
+    - postgres:15
+    - redis:7
+  variables:
+    DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/test"
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.10", "3.11", "3.12"]
+  script:
+    - pytest --junitxml=report.xml
+  artifacts:
+    reports:
+      junit: report.xml
+
+security_scan:
+  stage: security
+  image: python:3.11
+  script:
+    - pip install bandit safety
+    - bandit -r src/
+    - safety check
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deploy_staging:
+  stage: deploy
+  script:
+    - echo "Deploying to staging"
+  environment:
+    name: staging
+    url: https://staging.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+deploy_production:
+  stage: deploy
+  script:
+    - echo "Deploying to production"
+  environment:
+    name: production
+    url: https://example.com
+  when: manual
+  only:
+    - main
