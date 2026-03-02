@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "gl2gh"
 version = "1.0.0"
-description = "Production-grade GitLab CI/CD to GitHub Actions migration tool powered by Claude AI"
+description = "Production-grade GitLab CI/CD to GitHub Actions migration tool powered by GitHub Copilot"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -20,7 +20,7 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 dependencies = [
-    "anthropic>=0.40.0",
+    "github-copilot-sdk>=0.1.0",
     "click>=8.1.0",
     "pyyaml>=6.0",
     "ruamel.yaml>=0.18.0",

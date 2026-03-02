@@ -28,7 +28,7 @@ load_dotenv()
 def print_banner() -> None:
     console.print(Panel.fit(
         "[bold blue]gl2gh[/bold blue] — GitLab CI/CD -> GitHub Actions Migration Tool\n"
-        "[dim]Powered by Claude AI | Uses gh CLI for GitHub ops[/dim]",
+        "[dim]Powered by GitHub Copilot | Uses gh CLI for GitHub ops[/dim]",
         border_style="blue",
     ))
 
@@ -109,11 +109,12 @@ def main() -> None:
 @click.argument("input_file", default=".gitlab-ci.yml", type=click.Path(exists=True))
 @click.option("-o", "--output-dir", default=".github/workflows", help="Output directory.")
 @click.option("-n", "--name", default="CI", help="Workflow name.")
-@click.option("--ai", is_flag=True, default=False, help="Use Claude AI for enhanced conversion.")
+@click.option("--ai", is_flag=True, default=False, help="Use GitHub Copilot AI for enhanced conversion.")
+@click.option("--model", default=None, help="AI model to use (default: gpt-4.1).")
 @click.option("--dry-run", is_flag=True, help="Print output without writing files.")
 @click.option("-v", "--verbose", is_flag=True, help="Show detailed conversion info.")
 @click.option("--format", "output_format", type=click.Choice(["yaml", "json"]), default="yaml")
-def migrate(input_file, output_dir, name, ai, dry_run, verbose, output_format):
+def migrate(input_file, output_dir, name, ai, model, dry_run, verbose, output_format):
     """Migrate a GitLab CI pipeline to GitHub Actions."""
     print_banner()
     console.print(f"\n[dim]Reading:[/dim] [cyan]{input_file}[/cyan]")
@@ -128,14 +129,16 @@ def migrate(input_file, output_dir, name, ai, dry_run, verbose, output_format):
     console.print(f"[dim]Found {len(pipeline.jobs)} jobs across {len(pipeline.stages)} stages[/dim]")
 
     if ai:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            console.print("[bold red]ANTHROPIC_API_KEY not set. Cannot use --ai mode.[/bold red]")
+        github_token = os.environ.get("GITHUB_TOKEN")
+        if not github_token:
+            console.print("[bold red]GITHUB_TOKEN not set. Cannot use --ai mode.[/bold red]")
+            console.print("[dim]Set GITHUB_TOKEN or run 'gh auth login' with copilot scope.[/dim]")
             sys.exit(1)
         from gl2gh.agents.migration_agent import MigrationAgent
+        model = model or os.environ.get("GL2GH_MODEL", "gpt-4.1")
         with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as progress:
             task = progress.add_task("Running AI-enhanced migration...", total=None)
-            agent = MigrationAgent(api_key=api_key)
+            agent = MigrationAgent(github_token=github_token, model=model)
             result = agent.migrate(pipeline, source_file=input_file, workflow_name=name)
             progress.remove_task(task)
     else:
@@ -236,8 +239,9 @@ def validate(workflow_dir, verbose):
 @click.argument("target_github_repo")
 @click.option("--branch", default="main")
 @click.option("--ai", is_flag=True)
+@click.option("--model", default=None, help="AI model to use (default: gpt-4.1).")
 @click.option("-v", "--verbose", is_flag=True)
-def migrate_repo(source_gitlab_repo, target_github_repo, branch, ai, verbose):
+def migrate_repo(source_gitlab_repo, target_github_repo, branch, ai, model, verbose):
     """Full repository migration from GitLab to GitHub.
 
     Uses gh CLI for GitHub operations when available."""
@@ -251,12 +255,14 @@ def migrate_repo(source_gitlab_repo, target_github_repo, branch, ai, verbose):
         console.print("[yellow]Install gh CLI for full automation: brew install gh[/yellow]")
 
     if ai:
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            console.print("[bold red]ANTHROPIC_API_KEY not set.[/bold red]")
+        github_token = os.environ.get("GITHUB_TOKEN")
+        if not github_token:
+            console.print("[bold red]GITHUB_TOKEN not set.[/bold red]")
+            console.print("[dim]Set GITHUB_TOKEN or run 'gh auth login' with copilot scope.[/dim]")
             sys.exit(1)
         from gl2gh.agents.migration_agent import MigrationAgent
-        agent = MigrationAgent(api_key=api_key)
+        model = model or os.environ.get("GL2GH_MODEL", "gpt-4.1")
+        agent = MigrationAgent(github_token=github_token, model=model)
         success = agent.migrate_repository(source_gitlab_repo, target_github_repo, branch)
         if success:
             console.print("[bold green]Migration plan generated![/bold green]")

@@ -98,29 +98,53 @@ class ValidatorAgent:
 
         return issues
 
-    def validate_with_ai(self, content: str, api_key: str) -> list[ValidationIssue]:
-        """Validate using both static checks and Claude AI review."""
+    def validate_with_ai(
+        self, content: str, github_token: str, model: str = "gpt-4.1"
+    ) -> list[ValidationIssue]:
+        """Validate using both static checks and GitHub Copilot AI review."""
         issues = self.validate_static(content)
 
         try:
-            import anthropic
+            import asyncio
+            from copilot import CopilotClient
 
-            client = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
-                model="claude-opus-4-6",
-                max_tokens=4096,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        "Review this GitHub Actions workflow for correctness, security, "
-                        "and best practices. List each issue as: SEVERITY: message "
-                        "(where severity is ERROR, WARNING, or INFO).\n\n"
-                        "```yaml\n" + content + "\n```"
-                    ),
-                }],
-            )
+            async def _ai_validate():
+                client = CopilotClient(
+                    {"github_token": github_token, "auto_start": True}
+                )
+                await client.start()
+                session = await client.create_session(
+                    {"model": model, "streaming": False}
+                )
 
-            ai_text = response.content[0].text
+                collected: list[str] = []
+                done = asyncio.Event()
+
+                def on_event(event):
+                    t = event.type.value
+                    if t == "assistant.message_delta":
+                        collected.append(event.data.delta_content or "")
+                    elif t == "session.idle":
+                        done.set()
+
+                session.on(on_event)
+                await session.send(
+                    {
+                        "prompt": (
+                            "Review this GitHub Actions workflow for correctness, "
+                            "security, and best practices. List each issue as: "
+                            "SEVERITY: message (where severity is ERROR, WARNING, "
+                            "or INFO).\n\n"
+                            "```yaml\n" + content + "\n```"
+                        )
+                    }
+                )
+                await done.wait()
+                await session.destroy()
+                await client.stop()
+                return "".join(collected)
+
+            ai_text = asyncio.run(_ai_validate())
             for line in ai_text.split("\n"):
                 line = line.strip()
                 if line.startswith("ERROR:"):

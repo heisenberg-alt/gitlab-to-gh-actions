@@ -55,34 +55,61 @@ class OptimizerAgent:
         report.score_after = report.score_before + len(report.optimizations) * 5
         return report
 
-    def optimize_with_ai(self, content: str, api_key: str) -> OptimizationReport:
-        """Optimize using Claude AI for deeper analysis."""
+    def optimize_with_ai(
+        self, content: str, github_token: str, model: str = "gpt-4.1"
+    ) -> OptimizationReport:
+        """Optimize using GitHub Copilot AI for deeper analysis."""
         report = self.optimize(content)
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            with client.messages.stream(
-                model="claude-opus-4-6",
-                max_tokens=4096,
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        "Analyze this GitHub Actions workflow and suggest optimizations. "
-                        "Focus on: caching, parallelism, matrix builds, security, cost savings.\n\n"
-                        "```yaml\n" + content + "\n```"
-                    ),
-                }],
-            ) as stream:
-                full_text = ""
-                for text in stream.text_stream:
-                    full_text += text
+            import asyncio
+            from copilot import CopilotClient
+
+            async def _ai_optimize():
+                client = CopilotClient(
+                    {"github_token": github_token, "auto_start": True}
+                )
+                await client.start()
+                session = await client.create_session(
+                    {"model": model, "streaming": True}
+                )
+
+                full_text_parts: list[str] = []
+                done = asyncio.Event()
+
+                def on_event(event):
+                    t = event.type.value
+                    if t == "assistant.message_delta":
+                        full_text_parts.append(event.data.delta_content or "")
+                    elif t == "session.idle":
+                        done.set()
+
+                session.on(on_event)
+                await session.send(
+                    {
+                        "prompt": (
+                            "Analyze this GitHub Actions workflow and suggest "
+                            "optimizations. Focus on: caching, parallelism, "
+                            "matrix builds, security, cost savings.\n\n"
+                            "```yaml\n" + content + "\n```"
+                        )
+                    }
+                )
+                await done.wait()
+                await session.destroy()
+                await client.stop()
+                return "".join(full_text_parts)
+
+            full_text = asyncio.run(_ai_optimize())
             for line in full_text.split("\n"):
                 line = line.strip()
                 if line.startswith("- ") and ":" in line:
                     parts = line[2:].split(":", 1)
                     if len(parts) == 2:
                         report.optimizations.append(
-                            Optimization(category=parts[0].strip().lower(), description=parts[1].strip())
+                            Optimization(
+                                category=parts[0].strip().lower(),
+                                description=parts[1].strip(),
+                            )
                         )
         except Exception as e:
             logger.warning("AI optimization failed: %s", e)

@@ -4,7 +4,7 @@ This file provides context and guidelines for working on the gl2gh codebase with
 
 ## Project Overview
 
-**gl2gh** converts GitLab CI/CD pipelines (`.gitlab-ci.yml`) into GitHub Actions workflows (`.github/workflows/*.yml`). It is a Python 3.11+ CLI tool and library that uses a hybrid approach: deterministic rule-based translation for common CI constructs, and AI-powered agents (Anthropic Claude) for complex patterns that lack direct one-to-one mappings.
+**gl2gh** converts GitLab CI/CD pipelines (`.gitlab-ci.yml`) into GitHub Actions workflows (`.github/workflows/*.yml`). It is a Python 3.11+ CLI tool and library that uses a hybrid approach: deterministic rule-based translation for common CI constructs, and AI-powered agents (GitHub Copilot) for complex patterns that lack direct one-to-one mappings.
 
 ## Directory Structure
 
@@ -25,7 +25,7 @@ gitlab-to-gh-actions/
         yaml_utils.py          # YAML load/dump/validate helpers (ruamel.yaml for anchors, PyYAML for validation)
       agents/
         __init__.py
-        migration_agent.py     # Claude-powered migration agent with tool use loop (up to 8 iterations)
+        migration_agent.py     # GitHub Copilot-powered migration agent with tool use loop (up to 8 iterations)
         validator_agent.py     # Static validation + optional AI review of generated workflows
         optimizer_agent.py     # Workflow scoring (0-100) and optimization suggestions
   tests/
@@ -105,7 +105,7 @@ mypy src/gl2gh/
 
 4. **Pure mapping functions.** All functions in `mappings/rules.py` are pure (no side effects, no I/O). They take GitLab CI values and return GitHub Actions equivalents. This makes them independently testable and easy to extend.
 
-5. **Multi-agent tool-use loop.** The AI migration agent (`migration_agent.py`) uses Claude with tool definitions (`validate_yaml`, `save_workflow`, `add_warning`, `add_conversion_note`). It enters an agentic loop: Claude emits tool calls, the agent executes them, feeds results back, repeating for up to 8 iterations until `stop_reason == "end_turn"`.
+5. **Multi-agent tool-use loop.** The AI migration agent (`migration_agent.py`) uses GitHub Copilot with tool definitions (`validate_yaml`, `save_workflow`, `add_warning`, `add_conversion_note`). It enters an agentic loop: GitHub Copilot emits tool calls, the agent executes them, feeds results back, repeating for up to 8 iterations until `stop_reason == "end_turn"`.
 
 6. **Click + Rich CLI.** Click provides command structure, parameter validation, and shell completion. Rich adds tables, syntax highlighting, progress spinners, and panels.
 
@@ -159,7 +159,7 @@ if job.resource_group:
 
 ## Adding New Agent Capabilities
 
-The AI agents in `src/gl2gh/agents/` use Claude with tool calling. To add a new tool:
+The AI agents in `src/gl2gh/agents/` use GitHub Copilot with tool calling. To add a new tool:
 
 1. **Define the tool schema** in `_get_tools()` in the relevant agent. Each tool has a name, description, and JSON Schema for inputs:
 
@@ -188,9 +188,9 @@ The AI agents in `src/gl2gh/agents/` use Claude with tool calling. To add a new 
        return json.dumps({"success": True, "result": "..."})
    ```
 
-3. **Update the system prompt** if the new tool changes the agent's capabilities. The system prompt in `MigrationAgent.SYSTEM_PROMPT` tells Claude what tools are available and how to use them.
+3. **Update the system prompt** if the new tool changes the agent's capabilities. The system prompt in `MigrationAgent.SYSTEM_PROMPT` tells GitHub Copilot what tools are available and how to use them.
 
-4. **Test the tool** by mocking the Anthropic client in tests. Use `pytest-mock` to mock `anthropic.Anthropic` and simulate tool use responses.
+4. **Test the tool** by mocking the Copilot client in tests. Use `pytest-mock` to mock `CopilotClient` and simulate tool use responses.
 
 ### Agent Architecture
 
@@ -204,11 +204,11 @@ Rule-based converter produces baseline result
 Agent checks if AI enhancement is needed (warnings, unsupported features, complex patterns)
   |
   v
-Agent sends pipeline summary + baseline to Claude with tool definitions
+Agent sends pipeline summary + baseline to GitHub Copilot with tool definitions
   |
   v
 Agentic loop (up to 8 iterations):
-  Claude response -> extract tool_use blocks -> execute tools -> feed results back
+  GitHub Copilot response -> extract tool_use blocks -> execute tools -> feed results back
   Loop exits when stop_reason == "end_turn"
   |
   v
@@ -219,11 +219,10 @@ Return enhanced ConversionResult (or fall back to baseline on failure)
 
 | Variable | Purpose | Required |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Claude API key for AI-enhanced migration | For `--ai` mode only |
-| `GL2GH_MODEL` | Claude model override (default: claude-opus-4-6) | No |
+| `GITHUB_TOKEN` | GitHub token for AI-enhanced migration (needs Copilot access) and GitHub API calls in validation | For `--ai` mode only |
+| `GL2GH_MODEL` | AI model override (default: gpt-4.1) | No |
 | `GL2GH_LOG_LEVEL` | Logging verbosity: DEBUG, INFO, WARNING, ERROR | No |
 | `GL2GH_MAX_TOKENS` | Max tokens per agent call (default: 4096) | No |
-| `GITHUB_TOKEN` | Token for GitHub API calls in validation | No |
 | `GL2GH_OUTPUT_DIR` | Default output directory (default: `.github/workflows`) | No |
 
 ## Important Files to Know

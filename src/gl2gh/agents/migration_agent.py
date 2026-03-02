@@ -1,12 +1,14 @@
-"""Migration Agent - Uses Claude claude-opus-4-6 with tool use to migrate GitLab CI to GitHub Actions."""
+"""Migration Agent - Uses GitHub Copilot SDK with tool use to migrate GitLab CI to GitHub Actions."""
 
 from __future__ import annotations
+
+import asyncio
 import json
 import logging
 import os
 from typing import Any, Optional
 
-import anthropic
+from pydantic import BaseModel, Field
 
 from gl2gh.models import ConversionResult, GitLabPipeline
 from gl2gh.converter import GitLabToGitHubConverter
@@ -15,10 +17,35 @@ from gl2gh.utils.yaml_utils import add_yaml_header, validate_yaml_syntax
 logger = logging.getLogger(__name__)
 
 
-class MigrationAgent:
-    """Claude-powered migration agent for complex GitLab CI -> GitHub Actions conversions.
+# --- Pydantic tool input models ---
 
-    Uses claude-opus-4-6 with adaptive thinking and tool use to:
+
+class ValidateYamlInput(BaseModel):
+    yaml_content: str = Field(..., description="The YAML content to validate")
+
+
+class SaveWorkflowInput(BaseModel):
+    yaml_content: str = Field(..., description="The workflow YAML content to save")
+    filename: str = Field(..., description="Output filename for the workflow")
+    notes: list[str] = Field(default_factory=list, description="Conversion notes")
+    warnings: list[str] = Field(default_factory=list, description="Warning messages")
+    manual_review_items: list[str] = Field(
+        default_factory=list, description="Items needing manual review"
+    )
+
+
+class AddWarningInput(BaseModel):
+    message: str = Field(..., description="Warning message to add")
+
+
+class AddConversionNoteInput(BaseModel):
+    note: str = Field(..., description="Conversion note to add")
+
+
+class MigrationAgent:
+    """GitHub Copilot-powered migration agent for complex GitLab CI -> GitHub Actions conversions.
+
+    Uses the GitHub Copilot SDK with tool use to:
     1. Analyze the GitLab CI pipeline structure
     2. Identify complex patterns that need AI assistance
     3. Generate optimal GitHub Actions workflows
@@ -50,12 +77,10 @@ Always output valid GitHub Actions YAML. Use tools to validate your work."""
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: str = "claude-opus-4-6",
+        github_token: Optional[str] = None,
+        model: str = "gpt-4.1",
     ) -> None:
-        self.client = anthropic.Anthropic(
-            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-        )
+        self.github_token = github_token or os.environ.get("GITHUB_TOKEN", "")
         self.model = model
         self._converter = GitLabToGitHubConverter()
 
@@ -65,7 +90,7 @@ Always output valid GitHub Actions YAML. Use tools to validate your work."""
         source_file: str = ".gitlab-ci.yml",
         workflow_name: str = "CI",
     ) -> ConversionResult:
-        """Migrate a parsed GitLabPipeline using Claude AI.
+        """Migrate a parsed GitLabPipeline using GitHub Copilot AI.
         Falls back to rule-based conversion if AI fails."""
         self._converter = GitLabToGitHubConverter(
             workflow_name=workflow_name,
@@ -77,19 +102,28 @@ Always output valid GitHub Actions YAML. Use tools to validate your work."""
         needs_ai = (
             len(base_result.warnings) > 0
             or len(base_result.unsupported_features) > 0
-            or any(job.rules or job.parallel or job.extends for job in pipeline.jobs.values())
+            or any(
+                job.rules or job.parallel or job.extends
+                for job in pipeline.jobs.values()
+            )
         )
 
         if not needs_ai and base_result.success:
             return base_result
 
         try:
-            enhanced = self._run_ai_migration(pipeline, base_result, source_file, workflow_name)
+            enhanced = asyncio.run(
+                self._run_ai_migration(
+                    pipeline, base_result, source_file, workflow_name
+                )
+            )
             enhanced.ai_enhanced = True
             return enhanced
         except Exception as exc:
             logger.warning("AI migration failed, using rule-based result: %s", exc)
-            base_result.warnings.append(f"AI enhancement failed ({exc}); using rule-based conversion.")
+            base_result.warnings.append(
+                f"AI enhancement failed ({exc}); using rule-based conversion."
+            )
             return base_result
 
     def migrate_repository(
@@ -98,142 +132,173 @@ Always output valid GitHub Actions YAML. Use tools to validate your work."""
         target_repo: str,
         branch: str = "main",
     ) -> bool:
-        """Full repository migration using streaming Claude."""
+        """Full repository migration using streaming GitHub Copilot."""
         try:
-            msg = f"""Help plan a GitLab to GitHub repository migration.
-Source: {source_repo}
-Target: {target_repo}
-Branch: {branch}
-
-Steps: 1. Clone repo 2. Find all .gitlab-ci.yml 3. Convert to GitHub Actions 4. Push to GitHub"""
-
-            with self.client.messages.stream(
-                model=self.model,
-                max_tokens=4096,
-                thinking={"type": "adaptive"},
-                system=self.SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": msg}],
-            ) as stream:
-                for text in stream.text_stream:
-                    print(text, end="", flush=True)
-                final = stream.get_final_message()
-            print()
-            return final.stop_reason == "end_turn"
+            return asyncio.run(
+                self._migrate_repository_async(source_repo, target_repo, branch)
+            )
         except Exception as exc:
             logger.error("Repository migration failed: %s", exc)
             return False
 
-    def _run_ai_migration(self, pipeline, base_result, source_file, workflow_name):
+    async def _migrate_repository_async(self, source_repo, target_repo, branch):
+        from copilot import CopilotClient
+
+        client = CopilotClient(
+            {"github_token": self.github_token, "auto_start": True}
+        )
+        await client.start()
+
+        session = await client.create_session(
+            {
+                "model": self.model,
+                "streaming": True,
+                "system_message": self.SYSTEM_PROMPT,
+            }
+        )
+
+        msg = (
+            f"Help plan a GitLab to GitHub repository migration.\n"
+            f"Source: {source_repo}\n"
+            f"Target: {target_repo}\n"
+            f"Branch: {branch}\n\n"
+            f"Steps: 1. Clone repo 2. Find all .gitlab-ci.yml "
+            f"3. Convert to GitHub Actions 4. Push to GitHub"
+        )
+
+        collected_text: list[str] = []
+        done = asyncio.Event()
+
+        def on_event(event):
+            t = event.type.value
+            if t == "assistant.message_delta":
+                text = event.data.delta_content or ""
+                print(text, end="", flush=True)
+                collected_text.append(text)
+            elif t == "session.idle":
+                done.set()
+
+        session.on(on_event)
+        await session.send({"prompt": msg})
+        await done.wait()
+        print()
+
+        await session.destroy()
+        await client.stop()
+        return len(collected_text) > 0
+
+    async def _run_ai_migration(
+        self, pipeline, base_result, source_file, workflow_name
+    ):
+        from copilot import CopilotClient, define_tool
+
         summary = self._summarize_pipeline(pipeline)
-        base_wf = list(base_result.output_workflows.values())[0] if base_result.output_workflows else ""
+        base_wf = (
+            list(base_result.output_workflows.values())[0]
+            if base_result.output_workflows
+            else ""
+        )
         warns = "\n".join(base_result.warnings) or "none"
         unsup = "\n".join(base_result.unsupported_features) or "none"
 
-        user_msg = f"""Review and improve this GitLab CI to GitHub Actions migration.
+        user_msg = (
+            f"Review and improve this GitLab CI to GitHub Actions migration.\n\n"
+            f"## Source Pipeline\n{summary}\n\n"
+            f"## Rule-based Output\n```yaml\n{base_wf}\n```\n\n"
+            f"## Warnings\n{warns}\n\n"
+            f"## Unsupported\n{unsup}\n\n"
+            f"Fix issues, handle unsupported features, optimize, "
+            f"and save using save_workflow tool."
+        )
 
-## Source Pipeline
-{summary}
-
-## Rule-based Output
-```yaml
-{base_wf}
-```
-
-## Warnings
-{warns}
-
-## Unsupported
-{unsup}
-
-Fix issues, handle unsupported features, optimize, and save using save_workflow tool."""
-
-        messages: list[dict[str, Any]] = [{"role": "user", "content": user_msg}]
-        tools = self._get_tools()
         result = ConversionResult(source_file=source_file)
 
-        for _ in range(8):
-            response = self.client.messages.create(
-                model=self.model, max_tokens=8192,
-                thinking={"type": "adaptive"},
-                system=self.SYSTEM_PROMPT, tools=tools, messages=messages,
+        # Define tools as closures that capture `result` and `workflow_name`
+        @define_tool(description="Validate GitHub Actions YAML syntax")
+        async def validate_yaml(params: ValidateYamlInput) -> str:
+            err = validate_yaml_syntax(params.yaml_content)
+            if err:
+                return json.dumps({"valid": False, "error": err})
+            return json.dumps({"valid": True})
+
+        @define_tool(description="Save final GitHub Actions workflow after validation")
+        async def save_workflow(params: SaveWorkflowInput) -> str:
+            err = validate_yaml_syntax(params.yaml_content)
+            if err:
+                return json.dumps({"success": False, "error": f"Invalid YAML: {err}"})
+            fname = params.filename or f"{workflow_name.lower()}.yml"
+            result.output_workflows[fname] = add_yaml_header(
+                params.yaml_content, result.source_file
             )
+            result.conversion_notes.extend(params.notes)
+            result.warnings.extend(params.warnings)
+            for item in params.manual_review_items:
+                result.conversion_notes.append(f"Manual review: {item}")
+            return json.dumps({"success": True, "filename": fname})
 
-            if response.stop_reason == "end_turn":
-                break
-            if response.stop_reason != "tool_use":
-                break
+        @define_tool(description="Add a migration warning")
+        async def add_warning(params: AddWarningInput) -> str:
+            result.warnings.append(params.message)
+            return json.dumps({"added": True})
 
-            messages.append({"role": "assistant", "content": response.content})
-            tool_results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
-                tr = self._execute_tool(block.name, block.input, result, workflow_name)
-                tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": tr})
-            messages.append({"role": "user", "content": tool_results})
+        @define_tool(description="Add a conversion note")
+        async def add_conversion_note(params: AddConversionNoteInput) -> str:
+            result.conversion_notes.append(params.note)
+            return json.dumps({"added": True})
+
+        client = CopilotClient(
+            {"github_token": self.github_token, "auto_start": True}
+        )
+        await client.start()
+
+        session = await client.create_session(
+            {
+                "model": self.model,
+                "streaming": False,
+                "tools": [validate_yaml, save_workflow, add_warning, add_conversion_note],
+                "system_message": self.SYSTEM_PROMPT,
+            }
+        )
+
+        done = asyncio.Event()
+
+        def on_event(event):
+            if event.type.value == "session.idle":
+                done.set()
+
+        session.on(on_event)
+        await session.send({"prompt": user_msg})
+        await done.wait()
+
+        await session.destroy()
+        await client.stop()
 
         if not result.output_workflows:
             result = base_result
         return result
 
-    def _execute_tool(self, name, inp, result, wf_name):
-        try:
-            if name == "validate_yaml":
-                err = validate_yaml_syntax(inp.get("yaml_content", ""))
-                return json.dumps({"valid": not err, "error": err} if err else {"valid": True})
-            elif name == "save_workflow":
-                content = inp.get("yaml_content", "")
-                fname = inp.get("filename", f"{wf_name.lower()}.yml")
-                err = validate_yaml_syntax(content)
-                if err:
-                    return json.dumps({"success": False, "error": f"Invalid YAML: {err}"})
-                result.output_workflows[fname] = add_yaml_header(content, result.source_file)
-                result.conversion_notes.extend(inp.get("notes", []))
-                result.warnings.extend(inp.get("warnings", []))
-                for item in inp.get("manual_review_items", []):
-                    result.conversion_notes.append(f"Manual review: {item}")
-                return json.dumps({"success": True, "filename": fname})
-            elif name == "add_warning":
-                result.warnings.append(inp.get("message", ""))
-                return json.dumps({"added": True})
-            elif name == "add_conversion_note":
-                result.conversion_notes.append(inp.get("note", ""))
-                return json.dumps({"added": True})
-            return json.dumps({"error": f"Unknown tool: {name}"})
-        except Exception as exc:
-            return json.dumps({"error": str(exc)})
-
-    def _get_tools(self):
-        return [
-            {"name": "validate_yaml", "description": "Validate GitHub Actions YAML",
-             "input_schema": {"type": "object", "properties": {"yaml_content": {"type": "string"}}, "required": ["yaml_content"]}},
-            {"name": "save_workflow", "description": "Save final GitHub Actions workflow",
-             "input_schema": {"type": "object", "properties": {
-                 "yaml_content": {"type": "string"}, "filename": {"type": "string"},
-                 "notes": {"type": "array", "items": {"type": "string"}},
-                 "warnings": {"type": "array", "items": {"type": "string"}},
-                 "manual_review_items": {"type": "array", "items": {"type": "string"}}},
-                 "required": ["yaml_content", "filename"]}},
-            {"name": "add_warning", "description": "Add a warning",
-             "input_schema": {"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"]}},
-            {"name": "add_conversion_note", "description": "Add a conversion note",
-             "input_schema": {"type": "object", "properties": {"note": {"type": "string"}}, "required": ["note"]}},
-        ]
-
     def _summarize_pipeline(self, pipeline):
         jobs = [j for j in pipeline.jobs.values() if not j.is_template]
         templates = [j for j in pipeline.jobs.values() if j.is_template]
-        lines = [f"Stages: {', '.join(pipeline.stages)}", f"Jobs: {len(jobs)}",
-                 f"Templates: {len(templates)}", f"Global vars: {len(pipeline.variables)}"]
+        lines = [
+            f"Stages: {', '.join(pipeline.stages)}",
+            f"Jobs: {len(jobs)}",
+            f"Templates: {len(templates)}",
+            f"Global vars: {len(pipeline.variables)}",
+        ]
         if pipeline.default_image:
             lines.append(f"Default image: {pipeline.default_image}")
         lines.append("\nJobs:")
         for job in jobs:
             feats = []
-            if job.rules: feats.append("rules")
-            if job.parallel: feats.append("parallel")
-            if job.extends: feats.append(f"extends({','.join(job.extends)})")
-            if job.environment: feats.append(f"env:{job.environment.name}")
+            if job.rules:
+                feats.append("rules")
+            if job.parallel:
+                feats.append("parallel")
+            if job.extends:
+                feats.append(f"extends({','.join(job.extends)})")
+            if job.environment:
+                feats.append(f"env:{job.environment.name}")
             feat_str = f" [{', '.join(feats)}]" if feats else ""
             lines.append(f"  - {job.name} (stage:{job.stage}){feat_str}")
         return "\n".join(lines)

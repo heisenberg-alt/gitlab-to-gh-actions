@@ -127,7 +127,7 @@ Pay attention to:
 gl2gh migrate .gitlab-ci.yml -n "CI Pipeline" -o .github/workflows
 
 # AI-enhanced migration for complex pipelines
-export ANTHROPIC_API_KEY="sk-ant-..."
+export GITHUB_TOKEN="ghp_your-token-here"
 gl2gh migrate .gitlab-ci.yml --ai -n "CI Pipeline" -o .github/workflows
 ```
 

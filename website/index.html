@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>gl2gh - GitLab CI/CD to GitHub Actions Migration Tool</title>
-    <meta name="description" content="Migrate your GitLab CI/CD pipelines to GitHub Actions with confidence. Rule-based conversion with optional AI enhancement powered by Claude.">
+    <meta name="description" content="Migrate your GitLab CI/CD pipelines to GitHub Actions with confidence. Rule-based conversion with optional AI enhancement powered by GitHub Copilot.">
     <style>
         /* ============================================================
            Reset and Base
@@ -659,7 +659,7 @@
             <p>
                 A production-grade CLI tool that converts your GitLab CI/CD pipelines
                 to GitHub Actions workflows. Rule-based conversion with optional
-                AI enhancement powered by Claude.
+                AI enhancement powered by GitHub Copilot.
             </p>
             <div class="hero-buttons">
                 <a href="#quickstart" class="btn btn-primary">Get Started</a>
@@ -692,7 +692,7 @@
                     <div class="feature-icon purple">&#x2728;</div>
                     <h3>AI-Enhanced Migration</h3>
                     <p>
-                        Optional Claude-powered agent for complex patterns. Handles
+                        Optional GitHub Copilot-powered agent for complex patterns. Handles
                         advanced rules conditions, multi-project pipelines, template
                         resolution, and edge cases that pure rules cannot cover.
                     </p>
@@ -788,7 +788,7 @@
 <span class="command">gl2gh validate</span> <span class="arg">.github/workflows/</span>
 
 <span class="comment"># (Optional) AI-enhanced migration</span>
-<span class="command">export</span> ANTHROPIC_API_KEY=<span class="arg">"sk-ant-..."</span>
+<span class="command">export</span> GITHUB_TOKEN=<span class="arg">"ghp_your-token-here"</span>
 <span class="command">gl2gh migrate</span> <span class="arg">.gitlab-ci.yml</span> <span class="flag">--ai</span></pre>
             </div>
         </div>

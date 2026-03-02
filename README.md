@@ -4,14 +4,14 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](pyproject.toml)
 
-A production-grade migration tool that converts GitLab CI/CD pipelines (`.gitlab-ci.yml`) to GitHub Actions workflows. Combines deterministic rule-based conversion with optional AI-enhanced migration powered by Claude for handling complex patterns.
+A production-grade migration tool that converts GitLab CI/CD pipelines (`.gitlab-ci.yml`) to GitHub Actions workflows. Combines deterministic rule-based conversion with optional AI-enhanced migration powered by GitHub Copilot for handling complex patterns.
 
 ---
 
 ## Features
 
 - **Rule-based conversion engine** -- Deterministic mapping of GitLab CI concepts to GitHub Actions equivalents, covering stages, jobs, variables, caching, artifacts, services, environments, matrix builds, and more.
-- **AI-enhanced migration** -- Optional Claude-powered agent that handles complex patterns like templates (`extends`), advanced `rules:`, multi-project pipelines, and edge cases that pure rules cannot cover.
+- **AI-enhanced migration** -- Optional Copilot-powered agent that handles complex patterns like templates (`extends`), advanced `rules:`, multi-project pipelines, and edge cases that pure rules cannot cover.
 - **Full CLI interface** -- Five commands (`migrate`, `inspect`, `validate`, `migrate-repo`, `gh-status`) for every stage of the migration workflow.
 - **Comprehensive variable translation** -- Automatically maps `$CI_COMMIT_SHA`, `$CI_REGISTRY_IMAGE`, and 30+ other GitLab CI predefined variables to their GitHub Actions equivalents.
 - **Validation and optimization** -- Built-in validator checks generated workflows for structural correctness, security issues (script injection patterns), and best practices. Optimizer agent suggests caching, concurrency, and cost improvements.
@@ -40,7 +40,7 @@ gl2gh --version
 
 - Python 3.11 or later
 - (Optional) [GitHub CLI](https://cli.github.com/) (`gh`) for repository operations
-- (Optional) `ANTHROPIC_API_KEY` for AI-enhanced migration
+- (Optional) `GITHUB_TOKEN` for AI-enhanced migration
 
 ---
 
@@ -60,7 +60,7 @@ gl2gh migrate .gitlab-ci.yml -o .github/workflows -n "CI/CD Pipeline"
 # Dry run -- print output without writing files
 gl2gh migrate .gitlab-ci.yml --dry-run
 
-# AI-enhanced conversion (requires ANTHROPIC_API_KEY)
+# AI-enhanced conversion (requires GITHUB_TOKEN)
 gl2gh migrate .gitlab-ci.yml --ai
 
 # Verbose output with conversion notes and unsupported feature details
@@ -123,8 +123,8 @@ Reports whether `gh` CLI and the GitHub Copilot extension are installed.
 For complex pipelines with templates, advanced rules, matrix builds, or multi-project triggers, enable AI-enhanced migration:
 
 ```bash
-# Set your Anthropic API key
-export ANTHROPIC_API_KEY="sk-ant-..."
+# Set your GitHub API key
+export GITHUB_TOKEN="ghp_your-token-here"
 
 # Run with AI enhancement
 gl2gh migrate .gitlab-ci.yml --ai
@@ -134,11 +134,11 @@ The AI agent works as follows:
 
 1. **Baseline** -- Runs the rule-based converter first to produce a baseline workflow.
 2. **Analysis** -- Examines warnings, unsupported features, and complex patterns (rules, parallel, extends).
-3. **Enhancement** -- Uses Claude with tool calling (`validate_yaml`, `save_workflow`, `add_warning`, `add_conversion_note`) in an agentic loop to iteratively improve the output.
+3. **Enhancement** -- Uses GitHub Copilot with tool calling (`validate_yaml`, `save_workflow`, `add_warning`, `add_conversion_note`) in an agentic loop to iteratively improve the output.
 4. **Validation** -- Validates the final YAML before saving.
 5. **Fallback** -- If AI enhancement fails, falls back gracefully to the rule-based result with a warning.
 
-The migration agent uses Claude Opus with adaptive thinking for deep reasoning about pipeline semantics. The validator and optimizer agents provide additional AI-powered review.
+The migration agent uses GitHub Copilot with adaptive thinking for deep reasoning about pipeline semantics. The validator and optimizer agents provide additional AI-powered review.
 
 ---
 
@@ -156,7 +156,7 @@ src/gl2gh/
     rules.py               # Variable translation, trigger mapping, cache/artifact rules
   agents/
     __init__.py
-    migration_agent.py     # Claude-powered migration with tool use (agentic loop)
+    migration_agent.py     # Copilot-powered migration with tool use (agentic loop)
     validator_agent.py     # Static + AI workflow validation
     optimizer_agent.py     # Workflow optimization analysis and scoring
   utils/
@@ -170,7 +170,7 @@ src/gl2gh/
 
 2. **Convert** -- `GitLabToGitHubConverter` walks the pipeline model and applies deterministic mapping rules: stages become job dependency graphs via `needs`, variables are translated through a 30+ entry lookup table, `only/except` and `rules` become `on:` triggers and `if:` conditions, services become container service definitions, cache becomes `actions/cache@v4` steps, and artifacts become `actions/upload-artifact@v4` steps.
 
-3. **Enhance (optional)** -- `MigrationAgent` sends the rule-based output along with warnings and unsupported features to Claude. The agent uses tool calling to validate YAML, save improved workflows, and annotate manual review items. It runs for up to 8 iterations until Claude signals completion.
+3. **Enhance (optional)** -- `MigrationAgent` sends the rule-based output along with warnings and unsupported features to GitHub Copilot. The agent uses tool calling to validate YAML, save improved workflows, and annotate manual review items. It runs for up to 8 iterations until GitHub Copilot signals completion.
 
 4. **Validate** -- `ValidatorAgent` checks the output for structural correctness (required keys, valid runners, step definitions) and security issues (script injection patterns in PR head ref, issue title, issue body, and comment body).
 
@@ -301,7 +301,7 @@ Create a `.env` file in your project root for optional configuration:
 
 ```bash
 # Required only for --ai mode
-ANTHROPIC_API_KEY=sk-ant-...
+GITHUB_TOKEN=ghp_your-token-here
 
 # GitHub CLI is auto-detected
 ```
