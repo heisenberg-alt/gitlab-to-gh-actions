@@ -117,7 +117,7 @@ class MigrationAgent:
             return base_result
 
         try:
-            enhanced = asyncio.run(
+            enhanced: ConversionResult = asyncio.run(
                 self._run_ai_migration(
                     pipeline, base_result, source_file, workflow_name
                 )
@@ -139,14 +139,17 @@ class MigrationAgent:
     ) -> bool:
         """Full repository migration using streaming GitHub Copilot."""
         try:
-            return asyncio.run(
+            success: bool = asyncio.run(
                 self._migrate_repository_async(source_repo, target_repo, branch)
             )
+            return success
         except Exception as exc:
             logger.error("Repository migration failed: %s", exc)
             return False
 
-    async def _migrate_repository_async(self, source_repo, target_repo, branch):
+    async def _migrate_repository_async(
+        self, source_repo: str, target_repo: str, branch: str
+    ) -> bool:
         from copilot import CopilotClient
 
         client = CopilotClient({"github_token": self.github_token, "auto_start": True})
@@ -156,7 +159,7 @@ class MigrationAgent:
             {
                 "model": self.model,
                 "streaming": True,
-                "system_message": self.SYSTEM_PROMPT,
+                "system_message": self.SYSTEM_PROMPT,  # type: ignore[typeddict-item]
             }
         )
 
@@ -191,8 +194,12 @@ class MigrationAgent:
         return len(collected_text) > 0
 
     async def _run_ai_migration(
-        self, pipeline, base_result, source_file, workflow_name
-    ):
+        self,
+        pipeline: GitLabPipeline,
+        base_result: ConversionResult,
+        source_file: str,
+        workflow_name: str,
+    ) -> ConversionResult:
         from copilot import CopilotClient, define_tool
 
         summary = self._summarize_pipeline(pipeline)
@@ -262,7 +269,7 @@ class MigrationAgent:
                     add_warning,
                     add_conversion_note,
                 ],
-                "system_message": self.SYSTEM_PROMPT,
+                "system_message": self.SYSTEM_PROMPT,  # type: ignore[typeddict-item]
             }
         )
 
@@ -283,7 +290,7 @@ class MigrationAgent:
             result = base_result
         return result
 
-    def _summarize_pipeline(self, pipeline):
+    def _summarize_pipeline(self, pipeline: GitLabPipeline) -> str:
         jobs = [j for j in pipeline.jobs.values() if not j.is_template]
         templates = [j for j in pipeline.jobs.values() if j.is_template]
         lines = [

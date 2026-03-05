@@ -1,11 +1,17 @@
 """Tests for GitLab to GitHub Actions mapping rules."""
 
 from gl2gh.mappings.rules import (
+    convert_rules_to_if,
     image_to_runner,
+    normalize_service,
     parse_expire_in_days,
+    parse_only_except,
     parse_timeout_minutes,
+    stages_to_needs_graph,
     translate_cache_key,
     translate_variable,
+    translate_variables_dict,
+    when_to_if_condition,
 )
 
 
@@ -89,3 +95,118 @@ class TestTranslateCacheKey:
     def test_no_translation(self):
         result = translate_cache_key("my-static-key")
         assert result == "my-static-key"
+
+
+class TestNormalizeService:
+    def test_string_service(self):
+        assert normalize_service("postgres:14") == {"image": "postgres:14"}
+
+    def test_dict_service(self):
+        svc = {"name": "redis", "alias": "cache"}
+        result = normalize_service(svc)
+        assert result["name"] == "redis"
+        assert result["alias"] == "cache"
+
+
+class TestTranslateVariablesDict:
+    def test_translates_values(self):
+        result = translate_variables_dict({"IMG": "$CI_REGISTRY_IMAGE"})
+        assert "ghcr.io" in result["IMG"]
+
+    def test_preserves_plain_values(self):
+        result = translate_variables_dict({"FOO": "bar"})
+        assert result["FOO"] == "bar"
+
+
+class TestParseOnlyExcept:
+    def test_only_branches(self):
+        triggers, _ = parse_only_except(["branches"], None)
+        assert "push" in triggers
+
+    def test_only_tags(self):
+        triggers, _ = parse_only_except(["tags"], None)
+        assert "tags" in triggers.get("push", {})
+
+    def test_only_merge_requests(self):
+        triggers, _ = parse_only_except(["merge_requests"], None)
+        assert "pull_request" in triggers
+
+    def test_except_main(self):
+        _, condition = parse_only_except(None, ["main"])
+        assert condition is not None
+        assert "refs/heads/main" in condition
+
+    def test_defaults_when_empty(self):
+        triggers, cond = parse_only_except(None, None)
+        assert "push" in triggers
+        assert "pull_request" in triggers
+        assert cond is None
+
+
+class TestConvertRulesToIf:
+    def test_empty_rules(self):
+        cond, warns = convert_rules_to_if([])
+        assert cond is None
+        assert warns == []
+
+    def test_never_skipped(self):
+        cond, _ = convert_rules_to_if([{"when": "never"}])
+        assert cond is None
+
+    def test_manual_warning(self):
+        _, warns = convert_rules_to_if([{"when": "manual"}])
+        assert any("manual" in w.lower() for w in warns)
+
+    def test_if_clause_translated(self):
+        rules = [{"if": '$CI_COMMIT_BRANCH == "main"'}]
+        cond, _ = convert_rules_to_if(rules)
+        assert cond is not None
+        assert "github.ref_name" in cond
+        assert "$CI_COMMIT_BRANCH" not in cond
+
+
+class TestWhenToIfCondition:
+    def test_on_success(self):
+        assert when_to_if_condition("on_success") == "success()"
+
+    def test_on_failure(self):
+        assert when_to_if_condition("on_failure") == "failure()"
+
+    def test_always(self):
+        assert when_to_if_condition("always") == "always()"
+
+    def test_manual(self):
+        assert when_to_if_condition("manual") is None
+
+    def test_unknown(self):
+        assert when_to_if_condition("unknown_value") is None
+
+
+class TestStagesToNeedsGraph:
+    def test_linear_stages(self):
+        from gl2gh.models import GitLabJob
+
+        jobs = {
+            "build_app": GitLabJob(name="build_app", stage="build"),
+            "test_app": GitLabJob(name="test_app", stage="test"),
+            "deploy_app": GitLabJob(name="deploy_app", stage="deploy"),
+        }
+        stages = ["build", "test", "deploy"]
+        needs = stages_to_needs_graph(jobs, stages)
+        assert needs["build_app"] == []
+        assert needs["test_app"] == ["build_app"]
+        assert needs["deploy_app"] == ["test_app"]
+
+    def test_multiple_jobs_in_stage(self):
+        from gl2gh.models import GitLabJob
+
+        jobs = {
+            "lint": GitLabJob(name="lint", stage="test"),
+            "unit": GitLabJob(name="unit", stage="test"),
+            "deploy": GitLabJob(name="deploy", stage="deploy"),
+        }
+        stages = ["test", "deploy"]
+        needs = stages_to_needs_graph(jobs, stages)
+        assert needs["lint"] == []
+        assert needs["unit"] == []
+        assert set(needs["deploy"]) == {"lint", "unit"}

@@ -17,7 +17,8 @@ def load_yaml_with_anchors(content: str) -> dict[str, Any]:
     result = ry.load(content)
     if result is None:
         return {}
-    return _ruamel_to_dict(result)
+    parsed = _ruamel_to_dict(result)
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _ruamel_to_dict(obj: Any) -> Any:

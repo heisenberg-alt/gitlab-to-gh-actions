@@ -165,8 +165,8 @@ def convert_rules_to_if(rules: list[dict[str, Any]]) -> tuple[Optional[str], lis
 
         if if_clause:
             gh_expr = str(if_clause)
-            for gl, gh in GL_CI_VAR_TO_GH_EXPR.items():
-                gh_expr = gh_expr.replace(gl, f"github.{gh.split('.')[-1]}")
+            for gl_var, gh_var in GL_CI_VAR_TO_GH_EXPR.items():
+                gh_expr = gh_expr.replace(gl_var, gh_var)
             gh_expr = gh_expr.replace('"', "'")
             conditions.append(gh_expr)
 
@@ -213,23 +213,8 @@ def parse_timeout_minutes(timeout_str: str) -> Optional[int]:
     return total_minutes if total_minutes > 0 else None
 
 
-GITLAB_CACHE_KEY_TO_GH: dict[str, str] = {
-    "${CI_COMMIT_REF_SLUG}": "${{ github.ref_name }}",
-    "$CI_COMMIT_REF_SLUG": "${{ github.ref_name }}",
-    "${CI_PROJECT_NAME}": "${{ github.event.repository.name }}",
-    "$CI_PROJECT_NAME": "${{ github.event.repository.name }}",
-    "${CI_PIPELINE_ID}": "${{ github.run_id }}",
-    "$CI_PIPELINE_ID": "${{ github.run_id }}",
-    "${CI_JOB_NAME}": "${{ github.job }}",
-    "$CI_JOB_NAME": "${{ github.job }}",
-}
-
-
 def translate_cache_key(key: str) -> str:
-    result = key
-    for gl, gh in GITLAB_CACHE_KEY_TO_GH.items():
-        result = result.replace(gl, gh)
-    return result
+    return translate_variable(key)
 
 
 def normalize_service(service: str | dict[str, Any]) -> dict[str, Any]:

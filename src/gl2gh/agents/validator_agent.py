@@ -22,6 +22,8 @@ class ValidatorAgent:
     """Validates generated GitHub Actions workflow files."""
 
     REQUIRED_TOP_LEVEL = {"name", "on", "jobs"}
+    # PyYAML (YAML 1.1) parses bare 'on' as boolean True
+    _ON_KEYS = {"on", True}
     REQUIRED_JOB_KEYS = {"runs-on", "steps"}
     SECURITY_PATTERNS = [
         (
@@ -54,12 +56,24 @@ class ValidatorAgent:
             return issues
 
         for key in self.REQUIRED_TOP_LEVEL:
-            if key not in workflow:
+            if key == "on":
+                # YAML 1.1 parses bare 'on' as True
+                if not any(k in workflow for k in self._ON_KEYS):
+                    issues.append(
+                        ValidationIssue(
+                            "error",
+                            "Missing required top-level key: 'on'",
+                        )
+                    )
+            elif key not in workflow:
                 issues.append(
-                    ValidationIssue("error", f"Missing required top-level key: '{key}'")
+                    ValidationIssue(
+                        "error",
+                        f"Missing required top-level key: '{key}'",
+                    )
                 )
 
-        on_val = workflow.get("on")
+        on_val = workflow.get("on") or workflow.get(True)
         if on_val is not None:
             if not isinstance(on_val, (dict, list, str)):
                 issues.append(
