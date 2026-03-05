@@ -1,0 +1,1524 @@
+# GitLab CI/CD to GitHub Actions — Translation Knowledge Base
+#
+# This YAML file is the authoritative reference for translating GitLab CI/CD
+# pipeline patterns to GitHub Actions workflows. It is consumed by the gl2gh
+# conversion engine and AI agents to produce accurate migrations.
+#
+# Structure:
+#   concepts   – High-level concept mapping (stages, pipelines, runners, etc.)
+#   global     – Global/root-level keyword translations
+#   job        – Job-level keyword translations
+#   variables  – CI/CD variable translations
+#   triggers   – Event/trigger translations
+#   conditions – Rule/condition translations
+#   patterns   – Common multi-keyword patterns with before/after YAML examples
+#   unsupported – Features with no direct equivalent (require workarounds)
+
+# ============================================================================
+# 1. CONCEPT MAPPING
+# ============================================================================
+concepts:
+  pipeline:
+    gitlab: "Pipeline (triggered per push/MR/schedule/API)"
+    github: "Workflow (defined in .github/workflows/*.yml)"
+    notes: "One GitLab pipeline maps to one or more GitHub workflows"
+
+  stages:
+    gitlab: "stages: [build, test, deploy] — sequential execution groups"
+    github: "jobs.<id>.needs — explicit dependency graph (DAG)"
+    notes: |
+      GitLab stages run sequentially; all jobs in stage N must pass before
+      stage N+1 starts. GitHub Actions uses explicit `needs:` for ordering.
+      Jobs without `needs` run in parallel by default.
+
+  job:
+    gitlab: "Named YAML key with script/rules/etc."
+    github: "jobs.<job_id> with steps array"
+    notes: "GitLab jobs have a single script; GitHub jobs have multiple steps"
+
+  runner:
+    gitlab: "GitLab Runner (shared, group, project) selected by tags"
+    github: "GitHub-hosted runner (ubuntu-latest, windows-latest, macos-latest) or self-hosted"
+    notes: "GitLab tags -> GitHub runs-on labels"
+
+  template:
+    gitlab: "Hidden jobs (dot-prefixed like .base) with extends:"
+    github: "Reusable workflows or composite actions"
+    notes: "extends: merges config; GitHub uses workflow_call or action.yml"
+
+  include:
+    gitlab: "include:local, include:remote, include:project, include:template"
+    github: "Reusable workflows (uses: org/repo/.github/workflows/x.yml@ref)"
+    notes: "GitLab supports up to 150 includes; GitHub uses workflow_call"
+
+  secrets:
+    gitlab: "CI/CD Variables (project/group/instance level, masked/protected)"
+    github: "Repository/Organization/Environment secrets"
+    notes: "GitLab vars set as env; GitHub uses ${{ secrets.NAME }}"
+
+  environments:
+    gitlab: "environment: name with optional url, on_stop, auto_stop_in"
+    github: "jobs.<id>.environment with name and url"
+    notes: "Both support environment protection rules and deployment tracking"
+
+  artifacts:
+    gitlab: "artifacts:paths, artifacts:reports, artifacts:expire_in"
+    github: "actions/upload-artifact@v4, actions/download-artifact@v4"
+    notes: "GitLab artifacts auto-pass between stages; GitHub requires explicit upload/download"
+
+  cache:
+    gitlab: "cache:key, cache:paths, cache:policy"
+    github: "actions/cache@v4 with key, path, restore-keys"
+    notes: "GitLab up to 4 caches per job; GitHub one cache step per invocation"
+
+  services:
+    gitlab: "services: [{name: postgres:15, alias: db}]"
+    github: "jobs.<id>.services.<id> with image, ports, env, options"
+    notes: "Both use Docker sidecar containers; GitHub requires explicit port mapping"
+
+  matrix:
+    gitlab: "parallel:matrix with variable combinations"
+    github: "strategy.matrix with include/exclude"
+    notes: "Similar concept; GitHub supports more complex matrix expressions"
+
+  container:
+    gitlab: "image: python:3.12"
+    github: "jobs.<id>.container.image or runs-on with container"
+    notes: "GitLab always runs in Docker; GitHub can run directly on runner or in container"
+
+  pages:
+    gitlab: "Special 'pages' job with artifacts:paths: [public]"
+    github: "actions/deploy-pages@v4 with separate workflow"
+    notes: "GitLab Pages is built-in; GitHub Pages requires explicit workflow"
+
+  registry:
+    gitlab: "Built-in Container Registry ($CI_REGISTRY)"
+    github: "GitHub Container Registry (ghcr.io)"
+    notes: "Login differs; GitHub uses docker/login-action@v3"
+
+# ============================================================================
+# 2. GLOBAL KEYWORDS
+# ============================================================================
+global:
+  stages:
+    gitlab: |
+      stages:
+        - build
+        - test
+        - deploy
+    github: |
+      # No direct equivalent. Use jobs.<id>.needs to define execution order.
+      # Jobs without needs: run in parallel.
+    conversion: "stages_to_needs_graph() in rules.py builds dependency graph"
+
+  default:
+    gitlab: |
+      default:
+        image: python:3.12
+        before_script:
+          - pip install -r requirements.txt
+        cache:
+          paths: [.pip-cache/]
+        retry: 2
+        timeout: 30m
+        interruptible: true
+        tags: [docker]
+    github: |
+      # No single equivalent. Apply defaults per-job or use:
+      # - env: at workflow level for variables
+      # - Reusable workflows for repeated job config
+      # - YAML anchors for DRY (non-standard but works)
+    notes: |
+      default:image -> jobs.<id>.container.image (per job)
+      default:before_script -> repeated in each job's steps
+      default:cache -> actions/cache@v4 step in each job
+      default:retry -> Not natively supported; use retry actions
+      default:timeout -> jobs.<id>.timeout-minutes
+      default:interruptible -> concurrency group with cancel-in-progress
+      default:tags -> jobs.<id>.runs-on
+      default:services -> jobs.<id>.services
+      default:after_script -> Add final step with if: always()
+
+  variables:
+    gitlab: |
+      variables:
+        NODE_ENV: production
+        DATABASE_URL: $DB_CONNECTION_STRING
+    github: |
+      env:
+        NODE_ENV: production
+        DATABASE_URL: ${{ secrets.DB_CONNECTION_STRING }}
+    notes: "Global variables -> workflow-level env:. Secret refs need ${{ secrets.* }}"
+
+  workflow:
+    gitlab: |
+      workflow:
+        name: "Pipeline for $CI_COMMIT_REF_NAME"
+        rules:
+          - if: $CI_COMMIT_BRANCH == "main"
+          - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    github: |
+      name: "Pipeline for ${{ github.ref_name }}"
+      on:
+        push:
+          branches: [main]
+        pull_request: {}
+    notes: "workflow:rules controls whether pipeline runs; GitHub uses on: triggers"
+
+  workflow_auto_cancel:
+    gitlab: |
+      workflow:
+        auto_cancel:
+          on_new_commit: interruptible
+          on_job_failure: all
+    github: |
+      concurrency:
+        group: ${{ github.workflow }}-${{ github.ref }}
+        cancel-in-progress: true
+    notes: "workflow:auto_cancel -> concurrency group at workflow level"
+
+  include:
+    local:
+      gitlab: "include:local: '/templates/.base.yml'"
+      github: "No direct equivalent. Use reusable workflows or composite actions"
+    remote:
+      gitlab: "include:remote: 'https://example.com/ci-template.yml'"
+      github: "uses: owner/repo/.github/workflows/template.yml@ref"
+    project:
+      gitlab: |
+        include:
+          - project: 'my-group/my-project'
+            file: '/templates/ci.yml'
+            ref: main
+      github: "uses: my-group/my-project/.github/workflows/ci.yml@main"
+    template:
+      gitlab: "include:template: 'Auto-DevOps.gitlab-ci.yml'"
+      github: "No direct equivalent; use starter workflows from github/actions"
+    notes: |
+      GitLab include merges YAML; GitHub reusable workflows are separate jobs.
+      include:rules -> Use workflow_call with if: conditions.
+
+# ============================================================================
+# 3. JOB KEYWORDS — Complete Translation Table
+# ============================================================================
+job:
+  script:
+    gitlab: |
+      script:
+        - echo "Building..."
+        - make build
+    github: |
+      steps:
+        - name: Build
+          run: |
+            echo "Building..."
+            make build
+          shell: bash
+    notes: "script -> steps[].run. Multi-line uses | block scalar."
+
+  before_script:
+    gitlab: |
+      before_script:
+        - apt-get update
+        - pip install -r requirements.txt
+    github: |
+      steps:
+        - name: Setup
+          run: |
+            apt-get update
+            pip install -r requirements.txt
+        # ... then the main script steps
+    notes: "before_script -> prepend steps before main script steps"
+
+  after_script:
+    gitlab: |
+      after_script:
+        - echo "Cleanup"
+    github: |
+      steps:
+        # ... main steps ...
+        - name: Cleanup
+          if: always()
+          run: echo "Cleanup"
+    notes: "after_script -> final step with if: always() (runs even on failure)"
+
+  image:
+    gitlab: |
+      image:
+        name: python:3.12
+        entrypoint: [""]
+    github: |
+      container:
+        image: python:3.12
+        options: --entrypoint ""
+    notes: |
+      image -> container.image.
+      image:entrypoint -> container.options: --entrypoint
+      image:pull_policy -> No direct equivalent.
+      image:docker:platform -> container.options: --platform linux/amd64
+
+  services:
+    gitlab: |
+      services:
+        - name: postgres:15
+          alias: db
+          variables:
+            POSTGRES_DB: testdb
+            POSTGRES_PASSWORD: secret
+        - name: redis:7
+    github: |
+      services:
+        postgres:
+          image: postgres:15
+          env:
+            POSTGRES_DB: testdb
+            POSTGRES_PASSWORD: secret
+          ports:
+            - 5432:5432
+          options: >-
+            --health-cmd pg_isready
+            --health-interval 10s
+            --health-timeout 5s
+            --health-retries 5
+        redis:
+          image: redis:7
+          ports:
+            - 6379:6379
+    notes: |
+      services[].alias -> service key name in GitHub.
+      services[].variables -> services.<id>.env.
+      Must explicitly map ports in GitHub Actions.
+      Service hostnames: GitLab uses alias; GitHub uses the service key name.
+
+  stage:
+    gitlab: "stage: test"
+    github: "# Implicit via needs: dependency graph"
+    notes: "Stages have no direct equivalent. Use needs: for ordering."
+
+  extends:
+    gitlab: |
+      .base:
+        image: python:3.12
+        before_script:
+          - pip install -r requirements.txt
+
+      test:
+        extends: .base
+        script: pytest
+    github: |
+      # Option 1: Duplicate config (simplest)
+      # Option 2: Reusable workflow
+      # Option 3: Composite action for shared steps
+    notes: |
+      extends: is resolved at parse time by merging template into job.
+      The converter sees fully-resolved jobs after parser._resolve_extends().
+      For output, consider recommending reusable workflows for repeated patterns.
+
+  rules:
+    gitlab: |
+      rules:
+        - if: $CI_COMMIT_BRANCH == "main"
+          when: always
+        - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+        - when: never
+    github: |
+      # Rules map to a combination of:
+      # 1. on: triggers (push, pull_request, schedule, etc.)
+      # 2. jobs.<id>.if: conditions
+      if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    notes: |
+      rules:if -> jobs.<id>.if: with GitHub expression syntax.
+      rules:when: manual -> workflow_dispatch trigger or manual approval.
+      rules:when: delayed -> Not supported. Use cron schedule or workflow_dispatch.
+      rules:when: never -> Omit the job or set if: false.
+      rules:changes -> on.push.paths / on.pull_request.paths filter.
+      rules:exists -> No direct equivalent. Use a conditional step with file check.
+      rules:variables -> Use env: or set output in a prior step.
+      rules:needs -> jobs.<id>.needs (conditional needs not supported).
+      rules:allow_failure -> continue-on-error per step or job.
+
+  rules_changes:
+    gitlab: |
+      rules:
+        - changes:
+            paths:
+              - src/**/*.py
+              - requirements.txt
+            compare_to: main
+    github: |
+      on:
+        push:
+          paths:
+            - 'src/**/*.py'
+            - 'requirements.txt'
+        pull_request:
+          paths:
+            - 'src/**/*.py'
+            - 'requirements.txt'
+    notes: |
+      rules:changes -> on.<event>.paths filter.
+      changes:compare_to has no direct equivalent in path filters.
+      For per-job path filtering, use dorny/paths-filter@v3 action.
+
+  rules_exists:
+    gitlab: |
+      rules:
+        - exists:
+            - Dockerfile
+    github: |
+      steps:
+        - name: Check file exists
+          id: check
+          run: test -f Dockerfile && echo "exists=true" >> $GITHUB_OUTPUT || echo "exists=false" >> $GITHUB_OUTPUT
+        - name: Build Docker
+          if: steps.check.outputs.exists == 'true'
+          run: docker build .
+    notes: "rules:exists -> conditional step checking file existence"
+
+  needs:
+    gitlab: |
+      deploy:
+        needs:
+          - job: build
+            artifacts: true
+          - job: test
+            optional: true
+    github: |
+      deploy:
+        needs: [build, test]
+        if: always()  # if test is optional
+    notes: |
+      needs -> jobs.<id>.needs array.
+      needs:artifacts: true -> Use actions/download-artifact@v4.
+      needs:optional: true -> if: always() or if: '!cancelled()'
+      needs:parallel:matrix -> Needs specific matrix job via include.
+
+  cache:
+    gitlab: |
+      cache:
+        key:
+          files:
+            - Gemfile.lock
+          prefix: $CI_COMMIT_REF_SLUG
+        paths:
+          - vendor/
+        policy: pull-push
+        when: on_success
+    github: |
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor/
+          key: ${{ github.ref_name }}-${{ hashFiles('Gemfile.lock') }}
+          restore-keys: |
+            ${{ github.ref_name }}-
+    notes: |
+      cache:key -> cache key string. Use hashFiles() for file-based keys.
+      cache:key:files -> hashFiles('file1', 'file2').
+      cache:key:prefix -> prepend to the hashFiles() key.
+      cache:paths -> cache path.
+      cache:policy: pull -> Use actions/cache/restore@v4 (restore only).
+      cache:policy: push -> Use actions/cache/save@v4 (save only).
+      cache:policy: pull-push -> Standard actions/cache@v4.
+      cache:when: on_failure -> if: failure() on the cache save step.
+      cache:when: always -> if: always() on the cache save step.
+      cache:untracked -> Not supported. List paths explicitly.
+      cache:fallback_keys -> restore-keys in actions/cache.
+      Multiple caches -> Multiple actions/cache steps.
+
+  artifacts:
+    gitlab: |
+      artifacts:
+        paths:
+          - dist/
+          - build/output.zip
+        exclude:
+          - dist/tmp/
+        name: "build-${CI_COMMIT_REF_SLUG}"
+        expire_in: 1 week
+        when: on_success
+        expose_as: "Build output"
+    github: |
+      - name: Upload artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.ref_name }}
+          path: |
+            dist/
+            build/output.zip
+            !dist/tmp/
+          retention-days: 7
+    notes: |
+      artifacts:paths -> upload-artifact path.
+      artifacts:exclude -> prefix with ! in path.
+      artifacts:name -> artifact name.
+      artifacts:expire_in -> retention-days (in days).
+      artifacts:when: on_failure -> if: failure() on the upload step.
+      artifacts:when: always -> if: always() on the upload step.
+      artifacts:untracked -> Not supported. List paths explicitly.
+      artifacts:access -> Not directly supported. Use artifact permissions.
+
+  artifacts_reports:
+    junit:
+      gitlab: |
+        artifacts:
+          reports:
+            junit: test-results.xml
+      github: |
+        - name: Publish test results
+          uses: dorny/test-reporter@v1
+          if: always()
+          with:
+            name: Test Results
+            path: test-results.xml
+            reporter: java-junit
+      notes: "junit -> dorny/test-reporter@v1 or mikepenz/action-junit-report@v4"
+
+    coverage_report:
+      gitlab: |
+        artifacts:
+          reports:
+            coverage_report:
+              coverage_format: cobertura
+              path: coverage.xml
+      github: |
+        - name: Upload coverage
+          uses: codecov/codecov-action@v4
+          with:
+            files: coverage.xml
+      notes: "coverage_report -> codecov/codecov-action or irongut/CodeCoverageSummary"
+
+    codequality:
+      gitlab: "artifacts:reports:codequality: gl-code-quality-report.json"
+      github: |
+        # Use reviewdog or super-linter for code quality
+        - uses: reviewdog/action-setup@v1
+        - uses: github/super-linter@v6
+      notes: "No direct equivalent. Use linter actions."
+
+    sast:
+      gitlab: "artifacts:reports:sast: gl-sast-report.json"
+      github: |
+        - uses: github/codeql-action/init@v3
+        - uses: github/codeql-action/analyze@v3
+      notes: "SAST -> GitHub CodeQL or third-party SAST actions"
+
+    secret_detection:
+      gitlab: "artifacts:reports:secret_detection: gl-secret-detection-report.json"
+      github: |
+        # GitHub has built-in secret scanning (no workflow needed)
+        # Or use: trufflesecurity/trufflehog@main
+      notes: "Built into GitHub Advanced Security or use trufflehog action"
+
+    dependency_scanning:
+      gitlab: "artifacts:reports:dependency_scanning: gl-dependency-scanning-report.json"
+      github: |
+        # GitHub Dependabot is built-in (configuration in .github/dependabot.yml)
+        # Or use: actions/dependency-review-action@v4
+      notes: "dependency_scanning -> Dependabot + dependency-review-action"
+
+    container_scanning:
+      gitlab: "artifacts:reports:container_scanning: gl-container-scanning-report.json"
+      github: |
+        - uses: aquasecurity/trivy-action@master
+          with:
+            image-ref: myimage:latest
+            format: sarif
+            output: trivy-results.sarif
+        - uses: github/codeql-action/upload-sarif@v3
+          with:
+            sarif_file: trivy-results.sarif
+      notes: "container_scanning -> trivy-action + upload-sarif"
+
+    dast:
+      gitlab: "artifacts:reports:dast: gl-dast-report.json"
+      github: |
+        - uses: zaproxy/action-full-scan@v0.10.0
+          with:
+            target: https://example.com
+      notes: "DAST -> zaproxy/action-full-scan or OWASP ZAP actions"
+
+    terraform:
+      gitlab: "artifacts:reports:terraform: plan.json"
+      github: |
+        - uses: hashicorp/setup-terraform@v3
+        - run: terraform plan -out=tfplan
+        - uses: hashicorp/terraform-github-actions@master
+      notes: "terraform -> hashicorp/setup-terraform + plan output"
+
+    dotenv:
+      gitlab: |
+        artifacts:
+          reports:
+            dotenv: deploy.env
+      github: |
+        - name: Export vars
+          run: cat deploy.env >> $GITHUB_ENV
+      notes: "dotenv report -> append to $GITHUB_ENV for downstream steps/jobs"
+
+    metrics:
+      gitlab: "artifacts:reports:metrics: metrics.txt"
+      github: "# No direct equivalent. Use step outputs or job summaries."
+      notes: "Use $GITHUB_STEP_SUMMARY for displaying metrics in PR"
+
+    accessibility:
+      gitlab: "artifacts:reports:accessibility: gl-accessibility.json"
+      github: |
+        - uses: pa11y/pa11y-ci@latest
+      notes: "accessibility -> pa11y CI action or Lighthouse CI"
+
+    annotations:
+      gitlab: "artifacts:reports:annotations: gl-annotations.json"
+      github: "# Use ::notice, ::warning, ::error workflow commands"
+      notes: "annotations -> GitHub Actions workflow commands or job summaries"
+
+  dependencies:
+    gitlab: |
+      deploy:
+        dependencies:
+          - build
+    github: |
+      deploy:
+        needs: [build]
+        steps:
+          - uses: actions/download-artifact@v4
+            with:
+              name: build-artifacts
+    notes: |
+      dependencies controls which artifacts are downloaded.
+      dependencies: [] -> skip all artifact downloads.
+      In GitHub, artifacts must be explicitly downloaded.
+
+  environment:
+    gitlab: |
+      deploy_production:
+        environment:
+          name: production
+          url: https://example.com
+          on_stop: stop_production
+          auto_stop_in: 1 week
+          deployment_tier: production
+    github: |
+      deploy_production:
+        environment:
+          name: production
+          url: https://example.com
+    notes: |
+      environment:name -> environment.name.
+      environment:url -> environment.url.
+      environment:on_stop -> No direct equivalent. Use a separate cleanup workflow.
+      environment:auto_stop_in -> No direct equivalent. Configure in repo settings.
+      environment:deployment_tier -> No direct equivalent.
+      environment:action -> No equivalent (start/stop/prepare/verify).
+      environment:kubernetes -> Not applicable in GitHub Actions.
+
+  when:
+    on_success:
+      gitlab: "when: on_success"
+      github: "if: success()  # default behavior, can be omitted"
+    on_failure:
+      gitlab: "when: on_failure"
+      github: "if: failure()"
+    always:
+      gitlab: "when: always"
+      github: "if: always()"
+    manual:
+      gitlab: "when: manual"
+      github: |
+        # Option 1: workflow_dispatch trigger
+        on: workflow_dispatch
+        # Option 2: Environment protection rules with required reviewers
+        environment:
+          name: production  # configure approval in repo settings
+      notes: "Manual gates -> workflow_dispatch or environment protection rules"
+    delayed:
+      gitlab: |
+        when: delayed
+        start_in: 30 minutes
+      github: |
+        # No direct equivalent. Workarounds:
+        # 1. schedule trigger with cron
+        # 2. Sleep in a step: run: sleep 1800
+        # 3. Use a delayed job action
+      notes: "delayed + start_in has no clean equivalent"
+    never:
+      gitlab: "when: never"
+      github: "if: false  # or omit the job entirely"
+
+  allow_failure:
+    gitlab: |
+      test:
+        allow_failure: true
+        # Or with exit codes:
+        allow_failure:
+          exit_codes: [42, 137]
+    github: |
+      test:
+        continue-on-error: true
+        # For specific exit codes, wrap in a step:
+        steps:
+          - name: Test
+            id: test
+            continue-on-error: true
+            run: pytest
+          - name: Check result
+            if: steps.test.outcome == 'failure'
+            run: echo "Test failed but continuing"
+    notes: |
+      allow_failure: true -> continue-on-error: true (job level).
+      allow_failure:exit_codes -> No direct equivalent. Use step-level continue-on-error + outcome check.
+
+  parallel:
+    gitlab: |
+      test:
+        parallel: 5
+    github: |
+      test:
+        strategy:
+          matrix:
+            shard: [1, 2, 3, 4, 5]
+        steps:
+          - run: run-tests --shard ${{ matrix.shard }}
+    notes: "parallel: N -> strategy.matrix with N values"
+
+  parallel_matrix:
+    gitlab: |
+      test:
+        parallel:
+          matrix:
+            - PYTHON: ["3.10", "3.11", "3.12"]
+              OS: ["ubuntu", "alpine"]
+    github: |
+      test:
+        strategy:
+          fail-fast: false
+          matrix:
+            python: ["3.10", "3.11", "3.12"]
+            os: [ubuntu-latest, ubuntu-latest]
+        steps:
+          - uses: actions/setup-python@v5
+            with:
+              python-version: ${{ matrix.python }}
+    notes: |
+      parallel:matrix -> strategy.matrix.
+      GitLab generates CI_NODE_INDEX; GitHub matrix values are accessed via ${{ matrix.<key> }}.
+
+  trigger:
+    gitlab: |
+      trigger_downstream:
+        trigger:
+          project: my-group/downstream-project
+          branch: main
+          strategy: depend
+    github: |
+      # Option 1: workflow_dispatch via API
+      trigger_downstream:
+        steps:
+          - name: Trigger downstream
+            uses: actions/github-script@v7
+            with:
+              github-token: ${{ secrets.PAT_TOKEN }}
+              script: |
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: 'my-group',
+                  repo: 'downstream-project',
+                  workflow_id: 'ci.yml',
+                  ref: 'main',
+                })
+    notes: |
+      trigger:project -> Cross-repo workflow_dispatch via API or repository_dispatch.
+      trigger:strategy: depend -> Not natively supported. Use a polling/wait pattern.
+      trigger:include (child pipeline) -> Reusable workflow with uses: ./.github/workflows/child.yml.
+      trigger:forward -> Pass inputs to reusable workflows.
+
+  release:
+    gitlab: |
+      release:
+        tag_name: $CI_COMMIT_TAG
+        name: "Release $CI_COMMIT_TAG"
+        description: "Release notes"
+        assets:
+          links:
+            - name: "Package"
+              url: "https://example.com/pkg.tar.gz"
+    github: |
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Release ${{ github.ref_name }}"
+          body: "Release notes"
+          files: pkg.tar.gz
+    notes: |
+      release -> softprops/action-gh-release@v2 or actions/create-release.
+      release:assets:links -> Upload files with the release.
+
+  secrets:
+    vault:
+      gitlab: |
+        secrets:
+          DATABASE_PASSWORD:
+            vault:
+              engine:
+                name: kv-v2
+                path: secret
+              path: production/db
+              field: password
+      github: |
+        - name: Get secrets from Vault
+          uses: hashicorp/vault-action@v3
+          with:
+            url: ${{ secrets.VAULT_URL }}
+            method: jwt
+            role: github-actions
+            secrets: |
+              secret/data/production/db password | DATABASE_PASSWORD
+    notes: "secrets:vault -> hashicorp/vault-action@v3"
+
+    gcp_secret_manager:
+      gitlab: |
+        secrets:
+          API_KEY:
+            gcp_secret_manager:
+              name: api-key
+              version: latest
+      github: |
+        - uses: google-github-actions/auth@v2
+          with:
+            credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+        - uses: google-github-actions/get-secretmanager-secrets@v2
+          id: secrets
+          with:
+            secrets: |
+              api_key:project-id/api-key/latest
+      notes: "secrets:gcp_secret_manager -> google-github-actions/get-secretmanager-secrets"
+
+    azure_key_vault:
+      gitlab: |
+        secrets:
+          DB_CONN:
+            azure_key_vault:
+              name: db-connection-string
+              version: latest
+      github: |
+        - uses: azure/login@v2
+          with:
+            creds: ${{ secrets.AZURE_CREDENTIALS }}
+        - uses: azure/get-keyvault-secrets@v1
+          with:
+            keyvault: my-vault
+            secrets: db-connection-string
+          id: secrets
+      notes: "secrets:azure_key_vault -> azure/get-keyvault-secrets"
+
+  retry:
+    gitlab: |
+      test:
+        retry:
+          max: 2
+          when:
+            - runner_system_failure
+            - script_failure
+    github: |
+      test:
+        steps:
+          - name: Test with retry
+            uses: nick-fields/retry@v3
+            with:
+              max_attempts: 3
+              timeout_minutes: 10
+              command: pytest
+              retry_on: error
+    notes: |
+      retry:max -> nick-fields/retry@v3 max_attempts (add 1 since first run isn't a retry).
+      retry:when -> retry_on parameter or custom on_retry_command.
+      No native retry at job level in GitHub Actions.
+
+  timeout:
+    gitlab: "timeout: 1h 30m"
+    github: "timeout-minutes: 90"
+    notes: "timeout -> timeout-minutes (integer). Parse 'Xh Ym' to minutes."
+
+  tags:
+    gitlab: "tags: [docker, linux, gpu]"
+    github: "runs-on: [self-hosted, linux, gpu]"
+    notes: |
+      tags -> runs-on labels.
+      GitLab tags select runners; GitHub runs-on selects runner labels.
+      Standard runners: ubuntu-latest, windows-latest, macos-latest.
+      Self-hosted: runs-on: [self-hosted, label1, label2].
+
+  resource_group:
+    gitlab: |
+      deploy:
+        resource_group: production
+    github: |
+      deploy:
+        concurrency:
+          group: production
+          cancel-in-progress: false
+    notes: |
+      resource_group -> concurrency group.
+      resource_group ensures mutual exclusion; concurrency group does the same.
+      cancel-in-progress: false = queue (oldest_first behavior).
+      cancel-in-progress: true = cancel previous (newest_first behavior).
+
+  interruptible:
+    gitlab: "interruptible: true"
+    github: |
+      concurrency:
+        group: ${{ github.workflow }}-${{ github.ref }}
+        cancel-in-progress: true
+    notes: |
+      interruptible marks a job as safe to cancel on newer pipelines.
+      In GitHub, use concurrency groups with cancel-in-progress: true.
+
+  coverage:
+    gitlab: 'coverage: "/Total.*?(\\d+)%/"'
+    github: |
+      # No built-in coverage extraction. Use:
+      - uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage.xml
+          badge: true
+          format: markdown
+          output: both
+    notes: "coverage regex -> Use actions to parse coverage reports"
+
+  id_tokens:
+    gitlab: |
+      id_tokens:
+        VAULT_TOKEN:
+          aud: https://vault.example.com
+    github: |
+      permissions:
+        id-token: write
+      steps:
+        - uses: actions/github-script@v7
+          id: token
+          with:
+            script: |
+              const token = await core.getIDToken('https://vault.example.com')
+              core.setOutput('token', token)
+    notes: |
+      id_tokens -> permissions.id-token: write + getIDToken() in github-script.
+      Used for OIDC federation with cloud providers (AWS, GCP, Azure, Vault).
+
+  identity:
+    gitlab: |
+      deploy:
+        identity:
+          provider: aws
+    github: |
+      permissions:
+        id-token: write
+      steps:
+        - uses: aws-actions/configure-aws-credentials@v4
+          with:
+            role-to-assume: arn:aws:iam::123456789:role/deploy
+            aws-region: us-east-1
+    notes: "identity:provider -> OIDC authentication actions (aws, gcp, azure)"
+
+  inherit:
+    gitlab: |
+      test:
+        inherit:
+          default: false
+          variables:
+            - DEPLOY_ENV
+    github: "# No direct equivalent. Each job defines its own config independently."
+    notes: |
+      inherit:default: false -> Don't copy default: settings. In GitHub, jobs
+      are already independent. inherit:variables -> Only specific env: vars.
+
+  hooks:
+    gitlab: |
+      default:
+        hooks:
+          pre_get_sources_script:
+            - echo "Before checkout"
+    github: |
+      steps:
+        - name: Pre-checkout hook
+          run: echo "Before checkout"
+        - uses: actions/checkout@v4
+    notes: "hooks:pre_get_sources_script -> step before checkout action"
+
+  pages:
+    gitlab: |
+      pages:
+        publish: public
+        expire_in: 30 days
+    github: |
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - uses: actions/deploy-pages@v4
+    notes: "pages -> upload-pages-artifact + deploy-pages actions"
+
+  manual_confirmation:
+    gitlab: "manual_confirmation: 'Are you sure you want to deploy?'"
+    github: |
+      # Use environment protection rules with required reviewers
+      # Configure in: Settings > Environments > [env] > Required reviewers
+    notes: "manual_confirmation -> environment protection rules"
+
+# ============================================================================
+# 4. CI/CD VARIABLE TRANSLATIONS
+# ============================================================================
+variables:
+  # Commit info
+  CI_COMMIT_SHA: "${{ github.sha }}"
+  CI_COMMIT_SHORT_SHA: "${{ github.sha }}"  # GitHub doesn't have short SHA built-in
+  CI_COMMIT_REF_NAME: "${{ github.ref_name }}"
+  CI_COMMIT_REF_SLUG: "${{ github.ref_name }}"
+  CI_COMMIT_BRANCH: "${{ github.ref_name }}"
+  CI_COMMIT_TAG: "${{ github.ref_name }}"  # only valid on tag push events
+  CI_COMMIT_MESSAGE: "${{ github.event.head_commit.message }}"
+  CI_COMMIT_TITLE: "${{ github.event.head_commit.message }}"
+  CI_COMMIT_DESCRIPTION: "${{ github.event.head_commit.message }}"
+  CI_COMMIT_AUTHOR: "${{ github.event.head_commit.author.name }}"
+  CI_COMMIT_TIMESTAMP: "${{ github.event.head_commit.timestamp }}"
+
+  # Branch/ref
+  CI_DEFAULT_BRANCH: "${{ github.event.repository.default_branch }}"
+  CI_COMMIT_REF_PROTECTED: "# No direct equivalent. Check branch protection via API."
+
+  # Pipeline/job
+  CI_PIPELINE_ID: "${{ github.run_id }}"
+  CI_PIPELINE_IID: "${{ github.run_number }}"
+  CI_PIPELINE_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+  CI_PIPELINE_SOURCE: "${{ github.event_name }}"
+  CI_JOB_ID: "${{ github.job }}"
+  CI_JOB_NAME: "${{ github.job }}"
+  CI_JOB_STAGE: "# No direct equivalent. Jobs don't have stages."
+  CI_JOB_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+  CI_JOB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+  CI_NODE_INDEX: "${{ strategy.job-index }}"
+  CI_NODE_TOTAL: "${{ strategy.job-total }}"
+
+  # Project
+  CI_PROJECT_NAME: "${{ github.event.repository.name }}"
+  CI_PROJECT_PATH: "${{ github.repository }}"
+  CI_PROJECT_PATH_SLUG: "${{ github.repository }}"
+  CI_PROJECT_URL: "${{ github.event.repository.html_url }}"
+  CI_PROJECT_NAMESPACE: "${{ github.repository_owner }}"
+  CI_PROJECT_ID: "${{ github.repository_id }}"
+  CI_PROJECT_DIR: "${{ github.workspace }}"
+  CI_PROJECT_ROOT_NAMESPACE: "${{ github.repository_owner }}"
+  CI_PROJECT_VISIBILITY: "# Check via github.event.repository.visibility"
+
+  # Registry
+  CI_REGISTRY: "ghcr.io"
+  CI_REGISTRY_IMAGE: "ghcr.io/${{ github.repository }}"
+  CI_REGISTRY_USER: "${{ github.actor }}"
+  CI_REGISTRY_PASSWORD: "${{ secrets.GITHUB_TOKEN }}"
+
+  # Merge request / Pull request
+  CI_MERGE_REQUEST_IID: "${{ github.event.pull_request.number }}"
+  CI_MERGE_REQUEST_SOURCE_BRANCH_NAME: "${{ github.head_ref }}"
+  CI_MERGE_REQUEST_TARGET_BRANCH_NAME: "${{ github.base_ref }}"
+  CI_MERGE_REQUEST_TITLE: "${{ github.event.pull_request.title }}"
+  CI_MERGE_REQUEST_DESCRIPTION: "${{ github.event.pull_request.body }}"
+  CI_MERGE_REQUEST_LABELS: "# Use github.event.pull_request.labels[].name"
+  CI_MERGE_REQUEST_ASSIGNEES: "# Use github.event.pull_request.assignees[].login"
+
+  # Server
+  CI_SERVER_HOST: "github.com"
+  CI_SERVER_URL: "${{ github.server_url }}"
+  CI_SERVER_NAME: "GitHub"
+  CI_API_V4_URL: "${{ github.api_url }}"
+  CI_PAGES_URL: "# https://<owner>.github.io/<repo>"
+
+  # Environment
+  CI_ENVIRONMENT_NAME: "${{ github.event.deployment.environment }}"
+  CI_ENVIRONMENT_URL: "${{ github.event.deployment.payload.web_url }}"
+  CI_ENVIRONMENT_SLUG: "${{ github.event.deployment.environment }}"
+  CI_ENVIRONMENT_ACTION: "# No direct equivalent"
+
+  # Runner
+  CI_RUNNER_ID: "${{ runner.name }}"
+  CI_RUNNER_DESCRIPTION: "${{ runner.name }}"
+  CI_RUNNER_TAGS: "${{ runner.labels }}"
+  CI_RUNNER_EXECUTABLE_ARCH: "${{ runner.arch }}"
+
+  # Misc
+  GITLAB_CI: "true  # Set GITHUB_ACTIONS=true (auto-set by runner)"
+  CI: "true  # Auto-set by GitHub Actions runner"
+  GITLAB_USER_LOGIN: "${{ github.actor }}"
+  GITLAB_USER_EMAIL: "${{ github.actor }}@users.noreply.github.com"
+  GITLAB_USER_NAME: "${{ github.actor }}"
+  CI_BUILDS_DIR: "${{ github.workspace }}"
+  CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX: "# No equivalent. Use ghcr.io or Docker Hub directly."
+
+# ============================================================================
+# 5. TRIGGER/EVENT TRANSLATIONS
+# ============================================================================
+triggers:
+  push_to_branch:
+    gitlab: "only: [main, develop]"
+    github: |
+      on:
+        push:
+          branches: [main, develop]
+
+  push_to_tags:
+    gitlab: "only: [tags]"
+    github: |
+      on:
+        push:
+          tags: ['*']
+
+  merge_request:
+    gitlab: "only: [merge_requests]"
+    github: |
+      on:
+        pull_request: {}
+
+  schedule:
+    gitlab: |
+      # Configured in GitLab UI under CI/CD > Schedules
+      only: [schedules]
+    github: |
+      on:
+        schedule:
+          - cron: '0 2 * * 1-5'  # weekdays at 2am UTC
+
+  manual:
+    gitlab: "when: manual"
+    github: |
+      on:
+        workflow_dispatch:
+          inputs:
+            environment:
+              description: 'Target environment'
+              required: true
+              default: 'staging'
+              type: choice
+              options: [staging, production]
+
+  api_trigger:
+    gitlab: "only: [api, triggers]"
+    github: |
+      on:
+        repository_dispatch:
+          types: [deploy]
+        workflow_dispatch: {}
+
+  web_trigger:
+    gitlab: "only: [web]"
+    github: "on: workflow_dispatch: {}"
+
+  external_pull_request:
+    gitlab: "only: [external_pull_requests]"
+    github: |
+      on:
+        pull_request_target: {}
+
+  pipeline_trigger:
+    gitlab: "only: [pipelines]"
+    github: |
+      on:
+        workflow_run:
+          workflows: [upstream-workflow]
+          types: [completed]
+
+  chat:
+    gitlab: "only: [chat]"
+    github: "# No direct equivalent. Use slash commands via issue/PR comments."
+
+# ============================================================================
+# 6. CONDITION EXPRESSION TRANSLATIONS
+# ============================================================================
+conditions:
+  branch_check:
+    gitlab: '$CI_COMMIT_BRANCH == "main"'
+    github: "github.ref == 'refs/heads/main'"
+
+  tag_check:
+    gitlab: '$CI_COMMIT_TAG'
+    github: "startsWith(github.ref, 'refs/tags/')"
+
+  mr_check:
+    gitlab: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    github: "github.event_name == 'pull_request'"
+
+  schedule_check:
+    gitlab: '$CI_PIPELINE_SOURCE == "schedule"'
+    github: "github.event_name == 'schedule'"
+
+  variable_check:
+    gitlab: '$DEPLOY_ENV == "production"'
+    github: "env.DEPLOY_ENV == 'production'"
+    notes: "Or use vars.DEPLOY_ENV or inputs.DEPLOY_ENV depending on source"
+
+  regex_match:
+    gitlab: '$CI_COMMIT_BRANCH =~ /^release\//'
+    github: "startsWith(github.ref_name, 'release/')"
+    notes: "GitLab regex -> use startsWith/endsWith/contains for simple patterns"
+
+  negation:
+    gitlab: '$CI_COMMIT_BRANCH != "main"'
+    github: "github.ref != 'refs/heads/main'"
+
+  complex_and:
+    gitlab: '$CI_COMMIT_BRANCH == "main" && $DEPLOY_ENV == "production"'
+    github: "github.ref == 'refs/heads/main' && env.DEPLOY_ENV == 'production'"
+
+  complex_or:
+    gitlab: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop"'
+    github: "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'"
+
+  null_check:
+    gitlab: '$CI_COMMIT_TAG == null'
+    github: "!startsWith(github.ref, 'refs/tags/')"
+
+# ============================================================================
+# 7. COMMON PATTERNS (Before/After Examples)
+# ============================================================================
+patterns:
+  docker_build_and_push:
+    description: "Build and push Docker image to registry"
+    gitlab: |
+      docker-build:
+        image: docker:24
+        services:
+          - docker:24-dind
+        variables:
+          DOCKER_TLS_CERTDIR: "/certs"
+        before_script:
+          - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+        script:
+          - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+          - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    github: |
+      docker-build:
+        runs-on: ubuntu-latest
+        permissions:
+          packages: write
+        steps:
+          - uses: actions/checkout@v4
+          - uses: docker/login-action@v3
+            with:
+              registry: ghcr.io
+              username: ${{ github.actor }}
+              password: ${{ secrets.GITHUB_TOKEN }}
+          - uses: docker/build-push-action@v6
+            with:
+              push: true
+              tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+  node_ci:
+    description: "Node.js install, lint, test with caching"
+    gitlab: |
+      default:
+        image: node:20
+        cache:
+          key: ${CI_COMMIT_REF_SLUG}
+          paths: [node_modules/]
+
+      install:
+        stage: build
+        script: npm ci
+
+      lint:
+        stage: test
+        script: npm run lint
+
+      test:
+        stage: test
+        script: npm test
+        artifacts:
+          reports:
+            junit: test-results.xml
+    github: |
+      jobs:
+        install:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 20
+                cache: npm
+            - run: npm ci
+
+        lint:
+          runs-on: ubuntu-latest
+          needs: [install]
+          steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with: { node-version: 20, cache: npm }
+            - run: npm ci
+            - run: npm run lint
+
+        test:
+          runs-on: ubuntu-latest
+          needs: [install]
+          steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with: { node-version: 20, cache: npm }
+            - run: npm ci
+            - run: npm test
+            - uses: dorny/test-reporter@v1
+              if: always()
+              with:
+                name: Test Results
+                path: test-results.xml
+                reporter: java-junit
+
+  python_matrix:
+    description: "Python test matrix with services"
+    gitlab: |
+      test:
+        stage: test
+        image: python:$PYTHON_VERSION
+        parallel:
+          matrix:
+            - PYTHON_VERSION: ["3.10", "3.11", "3.12"]
+        services:
+          - name: postgres:15
+            alias: db
+            variables:
+              POSTGRES_DB: test
+              POSTGRES_PASSWORD: test
+        script:
+          - pip install -r requirements.txt
+          - pytest --junitxml=report.xml
+        artifacts:
+          reports:
+            junit: report.xml
+    github: |
+      test:
+        runs-on: ubuntu-latest
+        strategy:
+          fail-fast: false
+          matrix:
+            python-version: ["3.10", "3.11", "3.12"]
+        services:
+          postgres:
+            image: postgres:15
+            env:
+              POSTGRES_DB: test
+              POSTGRES_PASSWORD: test
+            ports: [5432:5432]
+            options: >-
+              --health-cmd pg_isready
+              --health-interval 10s
+              --health-timeout 5s
+              --health-retries 5
+        steps:
+          - uses: actions/checkout@v4
+          - uses: actions/setup-python@v5
+            with:
+              python-version: ${{ matrix.python-version }}
+          - run: pip install -r requirements.txt
+          - run: pytest --junitxml=report.xml
+          - uses: dorny/test-reporter@v1
+            if: always()
+            with:
+              name: Tests (Python ${{ matrix.python-version }})
+              path: report.xml
+              reporter: java-junit
+
+  deploy_with_environments:
+    description: "Multi-environment deploy with manual gate"
+    gitlab: |
+      deploy_staging:
+        stage: deploy
+        script: ./deploy.sh staging
+        environment:
+          name: staging
+          url: https://staging.example.com
+        rules:
+          - if: $CI_COMMIT_BRANCH == "main"
+
+      deploy_production:
+        stage: deploy
+        script: ./deploy.sh production
+        environment:
+          name: production
+          url: https://example.com
+        when: manual
+        needs: [deploy_staging]
+    github: |
+      deploy_staging:
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main'
+        environment:
+          name: staging
+          url: https://staging.example.com
+        steps:
+          - uses: actions/checkout@v4
+          - run: ./deploy.sh staging
+
+      deploy_production:
+        runs-on: ubuntu-latest
+        needs: [deploy_staging]
+        environment:
+          name: production  # configure required reviewers in settings
+          url: https://example.com
+        steps:
+          - uses: actions/checkout@v4
+          - run: ./deploy.sh production
+
+  terraform_pipeline:
+    description: "Terraform plan and apply"
+    gitlab: |
+      terraform_plan:
+        stage: build
+        image: hashicorp/terraform:1.7
+        script:
+          - terraform init
+          - terraform plan -out=tfplan
+        artifacts:
+          paths: [tfplan]
+          reports:
+            terraform: plan.json
+
+      terraform_apply:
+        stage: deploy
+        image: hashicorp/terraform:1.7
+        script:
+          - terraform init
+          - terraform apply -auto-approve tfplan
+        when: manual
+        needs: [terraform_plan]
+    github: |
+      terraform_plan:
+        runs-on: ubuntu-latest
+        permissions:
+          id-token: write
+          contents: read
+          pull-requests: write
+        steps:
+          - uses: actions/checkout@v4
+          - uses: hashicorp/setup-terraform@v3
+            with: { terraform_version: 1.7 }
+          - run: terraform init
+          - run: terraform plan -out=tfplan
+          - uses: actions/upload-artifact@v4
+            with:
+              name: tfplan
+              path: tfplan
+
+      terraform_apply:
+        runs-on: ubuntu-latest
+        needs: [terraform_plan]
+        environment: production  # manual approval via required reviewers
+        steps:
+          - uses: actions/checkout@v4
+          - uses: hashicorp/setup-terraform@v3
+            with: { terraform_version: 1.7 }
+          - uses: actions/download-artifact@v4
+            with: { name: tfplan }
+          - run: terraform init
+          - run: terraform apply -auto-approve tfplan
+
+  security_scanning:
+    description: "SAST, dependency scanning, secret detection"
+    gitlab: |
+      include:
+        - template: Security/SAST.gitlab-ci.yml
+        - template: Security/Dependency-Scanning.gitlab-ci.yml
+        - template: Security/Secret-Detection.gitlab-ci.yml
+    github: |
+      security:
+        runs-on: ubuntu-latest
+        permissions:
+          security-events: write
+        steps:
+          - uses: actions/checkout@v4
+          # SAST via CodeQL
+          - uses: github/codeql-action/init@v3
+            with: { languages: python }
+          - uses: github/codeql-action/analyze@v3
+          # Dependency scanning
+          - uses: actions/dependency-review-action@v4
+            if: github.event_name == 'pull_request'
+          # Secret detection (built into GitHub Advanced Security)
+          # Configure in: Settings > Code security and analysis
+
+# ============================================================================
+# 8. UNSUPPORTED / WORKAROUND-NEEDED FEATURES
+# ============================================================================
+unsupported:
+  include_templates:
+    description: "GitLab CI templates (Auto DevOps, Security scanners)"
+    workaround: "Use equivalent GitHub Actions from marketplace"
+    notes: |
+      GitLab provides include:template for Auto-DevOps, SAST, DAST, etc.
+      GitHub has starter workflows and marketplace actions but no 1:1 mapping.
+
+  multi_project_pipelines:
+    description: "trigger:project for cross-project pipelines"
+    workaround: "Use repository_dispatch or workflow_dispatch via API"
+    notes: "Requires PAT with workflow scope for cross-repo triggers"
+
+  child_pipelines:
+    description: "trigger:include for child pipelines in same repo"
+    workaround: "Use reusable workflows (workflow_call)"
+    notes: "Reusable workflows have limitations (max 4 levels deep, 20 per workflow)"
+
+  dynamic_child_pipeline:
+    description: "trigger:include with generated YAML artifact"
+    workaround: "Generate workflow files and commit, or use matrix strategies"
+    notes: "GitHub cannot create workflows dynamically at runtime"
+
+  merge_request_pipelines:
+    description: "Pipelines scoped to merge request context"
+    workaround: "on: pull_request provides similar but not identical behavior"
+    notes: "GitLab MR pipelines have CI_MERGE_REQUEST_* variables; use github.event.pull_request.*"
+
+  merge_trains:
+    description: "Merge trains (queued merge with pre-merge testing)"
+    workaround: "Use merge queue (Settings > General > Merge queue)"
+    notes: "GitHub merge queues are similar but configured differently"
+
+  environments_on_stop:
+    description: "environment:on_stop for cleanup jobs"
+    workaround: "Create a separate workflow for environment teardown"
+    notes: "No built-in stop-environment mechanism in GitHub Actions"
+
+  environments_auto_stop:
+    description: "environment:auto_stop_in timing"
+    workaround: "Use scheduled workflow to clean up stale environments"
+
+  when_delayed:
+    description: "when: delayed with start_in: 30 minutes"
+    workaround: "Use sleep command in step, schedule trigger, or external scheduler"
+
+  resource_group_process_modes:
+    description: "resource_group process modes (oldest_first, newest_first, unordered)"
+    workaround: "concurrency groups only support queue (cancel: false) or cancel (cancel: true)"
+
+  coverage_regex:
+    description: "coverage: regex for extracting coverage from output"
+    workaround: "Use coverage report actions (codecov, irongut/CodeCoverageSummary)"
+
+  dast_configuration:
+    description: "Built-in DAST site/scanner profiles"
+    workaround: "Use OWASP ZAP actions (zaproxy/action-full-scan)"
+
+  retry_when_types:
+    description: "retry:when with specific failure types (runner_system_failure, etc.)"
+    workaround: "nick-fields/retry@v3 retries on any error; no failure-type filtering"
+
+  inherit_selective:
+    description: "inherit:default: false or inherit:variables: [specific_vars]"
+    workaround: "GitHub jobs are naturally independent; explicitly define needed config"
+
+  run_keyword:
+    description: "run: (experimental structured execution with Kubernetes support)"
+    workaround: "No equivalent. Use standard steps with Kubernetes actions."
+
+  spec_inputs:
+    description: "spec:inputs for parameterized included configs"
+    workaround: "Reusable workflows with workflow_call inputs"
+
+  pages_path_prefix:
+    description: "pages:path_prefix for review app deployments"
+    workaround: "Use deployment previews (Vercel, Netlify, etc.) or custom routing"
