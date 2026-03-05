@@ -1,24 +1,24 @@
 """Command-line interface for gl2gh — integrates with gh CLI for GitHub operations."""
 
 from __future__ import annotations
+
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
-from rich.syntax import Syntax
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from dotenv import load_dotenv
+from rich.syntax import Syntax
+from rich.table import Table
 
-from gl2gh.parser import GitLabCIParser
 from gl2gh.converter import GitLabToGitHubConverter
 from gl2gh.models import ConversionResult
+from gl2gh.parser import GitLabCIParser
 from gl2gh.utils.yaml_utils import validate_yaml_syntax
 
 console = Console()
@@ -26,11 +26,14 @@ load_dotenv()
 
 
 def print_banner() -> None:
-    console.print(Panel.fit(
-        "[bold blue]gl2gh[/bold blue] — GitLab CI/CD -> GitHub Actions Migration Tool\n"
-        "[dim]Powered by GitHub Copilot | Uses gh CLI for GitHub ops[/dim]",
-        border_style="blue",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold blue]gl2gh[/bold blue] — "
+            "GitLab CI/CD -> GitHub Actions Migration Tool\n"
+            "[dim]Powered by GitHub Copilot | Uses gh CLI for GitHub ops[/dim]",
+            border_style="blue",
+        )
+    )
 
 
 def print_result(result: ConversionResult, verbose: bool = False) -> None:
@@ -90,7 +93,9 @@ def _gh_workflow_list() -> list[str]:
     try:
         result = subprocess.run(
             ["gh", "workflow", "list", "--json", "name,state"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         workflows = json.loads(result.stdout)
         return [w["name"] for w in workflows]
@@ -107,13 +112,22 @@ def main() -> None:
 
 @main.command()
 @click.argument("input_file", default=".gitlab-ci.yml", type=click.Path(exists=True))
-@click.option("-o", "--output-dir", default=".github/workflows", help="Output directory.")
+@click.option(
+    "-o", "--output-dir", default=".github/workflows", help="Output directory."
+)
 @click.option("-n", "--name", default="CI", help="Workflow name.")
-@click.option("--ai", is_flag=True, default=False, help="Use GitHub Copilot AI for enhanced conversion.")
+@click.option(
+    "--ai",
+    is_flag=True,
+    default=False,
+    help="Use GitHub Copilot AI for enhanced conversion.",
+)
 @click.option("--model", default=None, help="AI model to use (default: gpt-4.1).")
 @click.option("--dry-run", is_flag=True, help="Print output without writing files.")
 @click.option("-v", "--verbose", is_flag=True, help="Show detailed conversion info.")
-@click.option("--format", "output_format", type=click.Choice(["yaml", "json"]), default="yaml")
+@click.option(
+    "--format", "output_format", type=click.Choice(["yaml", "json"]), default="yaml"
+)
 def migrate(input_file, output_dir, name, ai, model, dry_run, verbose, output_format):
     """Migrate a GitLab CI pipeline to GitHub Actions."""
     print_banner()
@@ -126,17 +140,26 @@ def migrate(input_file, output_dir, name, ai, model, dry_run, verbose, output_fo
         console.print(f"[bold red]Failed to parse {input_file}: {exc}[/bold red]")
         sys.exit(1)
 
-    console.print(f"[dim]Found {len(pipeline.jobs)} jobs across {len(pipeline.stages)} stages[/dim]")
+    n_jobs = len(pipeline.jobs)
+    n_stages = len(pipeline.stages)
+    console.print(f"[dim]Found {n_jobs} jobs across {n_stages} stages[/dim]")
 
     if ai:
         github_token = os.environ.get("GITHUB_TOKEN")
         if not github_token:
-            console.print("[bold red]GITHUB_TOKEN not set. Cannot use --ai mode.[/bold red]")
-            console.print("[dim]Set GITHUB_TOKEN or run 'gh auth login' with copilot scope.[/dim]")
+            console.print(
+                "[bold red]GITHUB_TOKEN not set. Cannot use --ai mode.[/bold red]"
+            )
+            console.print(
+                "[dim]Set GITHUB_TOKEN or run 'gh auth login' with copilot scope.[/dim]"
+            )
             sys.exit(1)
         from gl2gh.agents.migration_agent import MigrationAgent
+
         model = model or os.environ.get("GL2GH_MODEL", "gpt-4.1")
-        with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as progress:
+        with Progress(
+            SpinnerColumn(), TextColumn("{task.description}"), console=console
+        ) as progress:
             task = progress.add_task("Running AI-enhanced migration...", total=None)
             agent = MigrationAgent(github_token=github_token, model=model)
             result = agent.migrate(pipeline, source_file=input_file, workflow_name=name)
@@ -156,6 +179,7 @@ def migrate(input_file, output_dir, name, ai, model, dry_run, verbose, output_fo
             console.print(f"\n[bold cyan]--- {filename} ---[/bold cyan]")
             if output_format == "json":
                 import yaml as _yaml
+
                 data = _yaml.safe_load(content)
                 console.print_json(json.dumps(data, indent=2))
             else:
@@ -168,7 +192,7 @@ def migrate(input_file, output_dir, name, ai, model, dry_run, verbose, output_fo
         (out_path / filename).write_text(content, encoding="utf-8")
         console.print(f"[green]Written:[/green] {out_path / filename}")
 
-    console.print(f"\n[bold green]Done![/bold green] Next steps:")
+    console.print("\n[bold green]Done![/bold green] Next steps:")
     console.print(f"  gl2gh validate {output_dir}")
     if _check_gh_cli():
         console.print("  gh workflow run ci.yml  # test the workflow")
@@ -186,29 +210,45 @@ def inspect(input_file, verbose):
     except Exception as exc:
         console.print(f"[bold red]Failed to parse: {exc}[/bold red]")
         sys.exit(1)
-    table = Table(title=f"Pipeline: {input_file}", show_header=True, header_style="bold blue")
+    table = Table(
+        title=f"Pipeline: {input_file}", show_header=True, header_style="bold blue"
+    )
     table.add_column("Property", style="cyan")
     table.add_column("Value")
     table.add_row("Stages", ", ".join(pipeline.stages))
     table.add_row("Global Variables", str(len(pipeline.variables)))
-    table.add_row("Jobs", str(len([j for j in pipeline.jobs.values() if not j.is_template])))
-    table.add_row("Templates", str(len([j for j in pipeline.jobs.values() if j.is_template])))
+    table.add_row(
+        "Jobs", str(len([j for j in pipeline.jobs.values() if not j.is_template]))
+    )
+    table.add_row(
+        "Templates", str(len([j for j in pipeline.jobs.values() if j.is_template]))
+    )
     table.add_row("Default Image", pipeline.default_image or "[dim]none[/dim]")
     table.add_row("Includes", str(len(pipeline.includes)))
     console.print(table)
     if verbose:
         jt = Table(title="Jobs", show_header=True, header_style="bold green")
-        jt.add_column("Job Name", style="cyan"); jt.add_column("Stage")
-        jt.add_column("Image"); jt.add_column("When"); jt.add_column("Needs")
+        jt.add_column("Job Name", style="cyan")
+        jt.add_column("Stage")
+        jt.add_column("Image")
+        jt.add_column("When")
+        jt.add_column("Needs")
         for n, job in pipeline.jobs.items():
             if not job.is_template:
-                jt.add_row(n, job.stage, job.image or "[dim]default[/dim]",
-                           job.when, ", ".join(job.needs) or "-")
+                jt.add_row(
+                    n,
+                    job.stage,
+                    job.image or "[dim]default[/dim]",
+                    job.when,
+                    ", ".join(job.needs) or "-",
+                )
         console.print(jt)
 
 
 @main.command()
-@click.argument("workflow_dir", default=".github/workflows", type=click.Path(exists=True))
+@click.argument(
+    "workflow_dir", default=".github/workflows", type=click.Path(exists=True)
+)
 @click.option("-v", "--verbose", is_flag=True)
 def validate(workflow_dir, verbose):
     """Validate generated GitHub Actions YAML files."""
@@ -246,24 +286,31 @@ def migrate_repo(source_gitlab_repo, target_github_repo, branch, ai, model, verb
 
     Uses gh CLI for GitHub operations when available."""
     print_banner()
-    console.print(f"\n[bold]Repository Migration[/bold]")
+    console.print("\n[bold]Repository Migration[/bold]")
     console.print(f"  From: [cyan]{source_gitlab_repo}[/cyan]")
     console.print(f"  To:   [cyan]{target_github_repo}[/cyan]")
 
     has_gh = _check_gh_cli()
     if not has_gh:
-        console.print("[yellow]Install gh CLI for full automation: brew install gh[/yellow]")
+        console.print(
+            "[yellow]Install gh CLI for full automation: brew install gh[/yellow]"
+        )
 
     if ai:
         github_token = os.environ.get("GITHUB_TOKEN")
         if not github_token:
             console.print("[bold red]GITHUB_TOKEN not set.[/bold red]")
-            console.print("[dim]Set GITHUB_TOKEN or run 'gh auth login' with copilot scope.[/dim]")
+            console.print(
+                "[dim]Set GITHUB_TOKEN or run 'gh auth login' with copilot scope.[/dim]"
+            )
             sys.exit(1)
         from gl2gh.agents.migration_agent import MigrationAgent
+
         model = model or os.environ.get("GL2GH_MODEL", "gpt-4.1")
         agent = MigrationAgent(github_token=github_token, model=model)
-        success = agent.migrate_repository(source_gitlab_repo, target_github_repo, branch)
+        success = agent.migrate_repository(
+            source_gitlab_repo, target_github_repo, branch
+        )
         if success:
             console.print("[bold green]Migration plan generated![/bold green]")
         else:
@@ -272,7 +319,9 @@ def migrate_repo(source_gitlab_repo, target_github_repo, branch, ai, model, verb
     else:
         console.print("\n[bold]Manual migration steps:[/bold]")
         console.print("  1. git clone " + source_gitlab_repo)
-        console.print("  2. gl2gh migrate .gitlab-ci.yml --output-dir .github/workflows")
+        console.print(
+            "  2. gl2gh migrate .gitlab-ci.yml --output-dir .github/workflows"
+        )
         if has_gh:
             console.print(f"  3. gh repo create {target_github_repo} --source . --push")
         else:
@@ -291,7 +340,9 @@ def gh_status():
             console.print(f"  Active workflows: {', '.join(workflows)}")
         # Check for copilot extension
         try:
-            r = subprocess.run(["gh", "extension", "list"], capture_output=True, text=True)
+            r = subprocess.run(
+                ["gh", "extension", "list"], capture_output=True, text=True
+            )
             if "copilot" in r.stdout.lower():
                 console.print("[green]gh copilot:[/green] installed")
             else:

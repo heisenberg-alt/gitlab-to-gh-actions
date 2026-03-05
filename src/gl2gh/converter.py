@@ -3,16 +3,11 @@ Core rule-based converter: GitLab CI pipeline -> GitHub Actions workflows.
 """
 
 from __future__ import annotations
+
 import logging
 import re
 from typing import Any, Optional
 
-from gl2gh.models import (
-    ConversionResult,
-    GitLabCache,
-    GitLabJob,
-    GitLabPipeline,
-)
 from gl2gh.mappings.rules import (
     convert_rules_to_if,
     image_to_runner,
@@ -26,7 +21,13 @@ from gl2gh.mappings.rules import (
     translate_variables_dict,
     when_to_if_condition,
 )
-from gl2gh.utils.yaml_utils import dump_yaml, add_yaml_header
+from gl2gh.models import (
+    ConversionResult,
+    GitLabCache,
+    GitLabJob,
+    GitLabPipeline,
+)
+from gl2gh.utils.yaml_utils import add_yaml_header, dump_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,7 @@ class GitLabToGitHubConverter:
             workflow["env"] = translate_variables_dict(pipeline.variables)
 
         non_template_jobs = {
-            name: job
-            for name, job in pipeline.jobs.items()
-            if not job.is_template
+            name: job for name, job in pipeline.jobs.items() if not job.is_template
         }
 
         stage_needs = stages_to_needs_graph(non_template_jobs, pipeline.stages)
@@ -89,7 +88,8 @@ class GitLabToGitHubConverter:
         for job_name, job in non_template_jobs.items():
             if job.trigger:
                 result.warnings.append(
-                    f"Job '{job_name}' uses 'trigger:' — converted to workflow_dispatch. "
+                    f"Job '{job_name}' uses 'trigger:' — "
+                    "converted to workflow_dispatch. "
                     "Review manually."
                 )
                 result.unsupported_features.append("trigger:")
@@ -110,7 +110,8 @@ class GitLabToGitHubConverter:
             rules = pipeline.workflow.get("rules", [])
             if rules:
                 result.warnings.append(
-                    "workflow: rules detected — using push/pull_request/workflow_dispatch defaults."
+                    "workflow: rules detected — using "
+                    "push/pull_request/workflow_dispatch defaults."
                 )
 
         job_triggers: list[dict[str, Any]] = []
@@ -153,7 +154,7 @@ class GitLabToGitHubConverter:
         runner = image_to_runner(job.image)
         gha_job["runs-on"] = runner
 
-        if job.image and ((":" in job.image or "/" in job.image)):
+        if job.image and (":" in job.image or "/" in job.image):
             gha_job["container"] = {"image": job.image}
 
         if job.services:
@@ -164,7 +165,9 @@ class GitLabToGitHubConverter:
             gha_job["needs"] = [self._sanitize_job_name(n) for n in needs if n]
 
         if job.environment:
-            env_spec: dict[str, Any] = {"name": translate_variable(job.environment.name)}
+            env_spec: dict[str, Any] = {
+                "name": translate_variable(job.environment.name)
+            }
             if job.environment.url:
                 env_spec["url"] = translate_variable(job.environment.url)
             gha_job["environment"] = env_spec
@@ -232,10 +235,12 @@ class GitLabToGitHubConverter:
     ) -> list[dict[str, Any]]:
         steps: list[dict[str, Any]] = []
 
-        steps.append({
-            "name": "Checkout code",
-            "uses": "actions/checkout@v4",
-        })
+        steps.append(
+            {
+                "name": "Checkout code",
+                "uses": "actions/checkout@v4",
+            }
+        )
 
         cache = job.cache or pipeline.default_cache
         if cache:
@@ -244,26 +249,32 @@ class GitLabToGitHubConverter:
                 steps.append(cache_step)
 
         if job.before_script:
-            steps.append({
-                "name": "Before script",
-                "run": self._script_to_run(job.before_script),
-                "shell": "bash",
-            })
+            steps.append(
+                {
+                    "name": "Before script",
+                    "run": self._script_to_run(job.before_script),
+                    "shell": "bash",
+                }
+            )
 
         if job.script:
-            steps.append({
-                "name": "Run script",
-                "run": self._script_to_run(job.script),
-                "shell": "bash",
-            })
+            steps.append(
+                {
+                    "name": "Run script",
+                    "run": self._script_to_run(job.script),
+                    "shell": "bash",
+                }
+            )
 
         if job.after_script:
-            steps.append({
-                "name": "After script",
-                "if": "always()",
-                "run": self._script_to_run(job.after_script),
-                "shell": "bash",
-            })
+            steps.append(
+                {
+                    "name": "After script",
+                    "if": "always()",
+                    "run": self._script_to_run(job.after_script),
+                    "shell": "bash",
+                }
+            )
 
         if job.artifacts:
             artifact_step = self._convert_artifacts_to_step(job, result)
@@ -291,7 +302,9 @@ class GitLabToGitHubConverter:
                 svc_def["ports"] = svc["ports"]
             if "environment" in svc or "variables" in svc:
                 env = svc.get("environment") or svc.get("variables") or {}
-                svc_def["env"] = translate_variables_dict(env) if isinstance(env, dict) else {}
+                svc_def["env"] = (
+                    translate_variables_dict(env) if isinstance(env, dict) else {}
+                )
             gha_services[name] = svc_def
         return gha_services
 
@@ -350,23 +363,26 @@ class GitLabToGitHubConverter:
             junit_paths = reports["junit"]
             if isinstance(junit_paths, str):
                 junit_paths = [junit_paths]
-            steps.append({
-                "name": "Publish test results",
-                "uses": "dorny/test-reporter@v1",
-                "if": "always()",
-                "with": {
-                    "name": "Test Results",
-                    "path": ", ".join(junit_paths),
-                    "reporter": "java-junit",
-                },
-            })
+            steps.append(
+                {
+                    "name": "Publish test results",
+                    "uses": "dorny/test-reporter@v1",
+                    "if": "always()",
+                    "with": {
+                        "name": "Test Results",
+                        "path": ", ".join(junit_paths),
+                        "reporter": "java-junit",
+                    },
+                }
+            )
             result.conversion_notes.append(
                 "JUnit reports: using dorny/test-reporter@v1."
             )
 
         if "coverage" in reports:
             result.warnings.append(
-                "Coverage reports: consider using Codecov or coverallsapp/github-action."
+                "Coverage reports: consider using Codecov "
+                "or coverallsapp/github-action."
             )
 
         unsupported_reports = set(reports.keys()) - {"junit", "coverage", "cobertura"}
@@ -384,7 +400,7 @@ class GitLabToGitHubConverter:
                 if key in combined:
                     existing = combined[key]
                     if isinstance(existing, list):
-                        for v in (values if isinstance(values, list) else [values]):
+                        for v in values if isinstance(values, list) else [values]:
                             if v not in existing:
                                 existing.append(v)
                     else:

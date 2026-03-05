@@ -1,17 +1,14 @@
 """YAML parsing and serialization utilities."""
 
 from __future__ import annotations
-import re
-from typing import Any, Optional
+
 from io import StringIO
+from typing import Any, Optional
+
 import yaml
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString
-
-
-def load_yaml(content: str) -> dict[str, Any]:
-    return yaml.safe_load(content) or {}
 
 
 def load_yaml_with_anchors(content: str) -> dict[str, Any]:
@@ -32,7 +29,10 @@ def _ruamel_to_dict(obj: Any) -> Any:
 
 
 def _dict_to_commented(obj: Any) -> Any:
-    """Convert plain dicts to CommentedMap, quoting the 'on' key to avoid YAML 1.1 bool."""
+    """Convert plain dicts to CommentedMap.
+
+    Quotes the 'on' key to avoid YAML 1.1 bool interpretation.
+    """
     if isinstance(obj, dict):
         cm = CommentedMap()
         for k, v in obj.items():
@@ -78,9 +78,3 @@ def validate_yaml_syntax(content: str) -> Optional[str]:
         return None
     except yaml.YAMLError as e:
         return str(e)
-
-
-def normalize_script_step(script: str | list[str]) -> list[str]:
-    if isinstance(script, str):
-        return [script]
-    return list(script)

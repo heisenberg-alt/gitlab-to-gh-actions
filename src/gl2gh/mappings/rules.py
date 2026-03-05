@@ -3,6 +3,7 @@ Comprehensive mapping rules from GitLab CI to GitHub Actions.
 """
 
 from __future__ import annotations
+
 import re
 from typing import Any, Optional
 
@@ -158,7 +159,8 @@ def convert_rules_to_if(rules: list[dict[str, Any]]) -> tuple[Optional[str], lis
             continue
         if when == "manual":
             warnings.append(
-                "Manual 'when: manual' rule detected — consider using 'workflow_dispatch' trigger"
+                "Manual 'when: manual' rule detected — "
+                "consider using 'workflow_dispatch' trigger"
             )
 
         if if_clause:
@@ -270,8 +272,7 @@ def stages_to_needs_graph(
 ) -> dict[str, list[str]]:
     stage_to_jobs: dict[str, list[str]] = {}
     for job_name, job in jobs.items():
-        if not job.is_template:
-            stage_to_jobs.setdefault(job.stage, []).append(job_name)
+        stage_to_jobs.setdefault(job.stage, []).append(job_name)
 
     needs_map: dict[str, list[str]] = {}
     ordered_stages = [s for s in stages if s in stage_to_jobs]

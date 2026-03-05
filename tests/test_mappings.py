@@ -2,11 +2,10 @@
 
 from gl2gh.mappings.rules import (
     image_to_runner,
-    translate_variable,
-    parse_timeout_minutes,
     parse_expire_in_days,
+    parse_timeout_minutes,
     translate_cache_key,
-    stages_to_needs_graph,
+    translate_variable,
 )
 
 

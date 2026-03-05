@@ -4,9 +4,11 @@ Parses .gitlab-ci.yml into structured Python objects.
 """
 
 from __future__ import annotations
-import logging
-from typing import Any, Optional
 
+import logging
+from typing import Any
+
+from gl2gh.mappings.rules import normalize_service
 from gl2gh.models import (
     GitLabArtifacts,
     GitLabCache,
@@ -21,9 +23,17 @@ from gl2gh.utils.yaml_utils import load_yaml_with_anchors
 logger = logging.getLogger(__name__)
 
 GLOBAL_KEYWORDS = {
-    "stages", "variables", "default", "include", "workflow",
-    "image", "services", "before_script", "after_script",
-    "cache", "artifacts",
+    "stages",
+    "variables",
+    "default",
+    "include",
+    "workflow",
+    "image",
+    "services",
+    "before_script",
+    "after_script",
+    "cache",
+    "artifacts",
 }
 
 
@@ -59,8 +69,7 @@ class GitLabCIParser:
             includes = raw["include"]
             if isinstance(includes, list):
                 pipeline.includes = [
-                    ({"local": i} if isinstance(i, str) else dict(i))
-                    for i in includes
+                    ({"local": i} if isinstance(i, str) else dict(i)) for i in includes
                 ]
             elif isinstance(includes, dict):
                 pipeline.includes = [dict(includes)]
@@ -184,7 +193,9 @@ class GitLabCIParser:
 
         except_ = raw_job.get("except")
         if except_ is not None:
-            job.except_ = {"refs": except_} if isinstance(except_, list) else dict(except_)
+            job.except_ = (
+                {"refs": except_} if isinstance(except_, list) else dict(except_)
+            )
 
         job.rules = list(raw_job.get("rules", []))
 
@@ -207,7 +218,9 @@ class GitLabCIParser:
             for template_name in reversed(job.extends):
                 template_job = pipeline.jobs.get(template_name)
                 if not template_job:
-                    logger.warning("extends: '%s' not found for job '%s'", template_name, job.name)
+                    logger.warning(
+                        "extends: '%s' not found for job '%s'", template_name, job.name
+                    )
                     continue
                 self._merge_job_template(job, template_job)
 
@@ -256,13 +269,7 @@ class GitLabCIParser:
     def _parse_services(self, raw: Any) -> list[dict[str, Any]]:
         if not raw:
             return []
-        result = []
-        for svc in raw:
-            if isinstance(svc, str):
-                result.append({"image": svc})
-            elif isinstance(svc, dict):
-                result.append(dict(svc))
-        return result
+        return [normalize_service(svc) for svc in raw]
 
     def _parse_cache(self, raw: Any) -> GitLabCache:
         if isinstance(raw, dict):

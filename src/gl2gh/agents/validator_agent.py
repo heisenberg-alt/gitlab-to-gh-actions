@@ -24,10 +24,19 @@ class ValidatorAgent:
     REQUIRED_TOP_LEVEL = {"name", "on", "jobs"}
     REQUIRED_JOB_KEYS = {"runs-on", "steps"}
     SECURITY_PATTERNS = [
-        ("${{ github.event.pull_request.head.ref }}", "Potential script injection via PR head ref"),
-        ("${{ github.event.issue.title }}", "Potential script injection via issue title"),
+        (
+            "${{ github.event.pull_request.head.ref }}",
+            "Potential script injection via PR head ref",
+        ),
+        (
+            "${{ github.event.issue.title }}",
+            "Potential script injection via issue title",
+        ),
         ("${{ github.event.issue.body }}", "Potential script injection via issue body"),
-        ("${{ github.event.comment.body }}", "Potential script injection via comment body"),
+        (
+            "${{ github.event.comment.body }}",
+            "Potential script injection via comment body",
+        ),
     ]
 
     def validate_static(self, content: str) -> list[ValidationIssue]:
@@ -46,12 +55,16 @@ class ValidatorAgent:
 
         for key in self.REQUIRED_TOP_LEVEL:
             if key not in workflow:
-                issues.append(ValidationIssue("error", f"Missing required top-level key: '{key}'"))
+                issues.append(
+                    ValidationIssue("error", f"Missing required top-level key: '{key}'")
+                )
 
         on_val = workflow.get("on")
         if on_val is not None:
             if not isinstance(on_val, (dict, list, str)):
-                issues.append(ValidationIssue("error", "'on' must be a mapping, list, or string"))
+                issues.append(
+                    ValidationIssue("error", "'on' must be a mapping, list, or string")
+                )
 
         jobs = workflow.get("jobs")
         if isinstance(jobs, dict):
@@ -76,25 +89,46 @@ class ValidatorAgent:
 
         for key in self.REQUIRED_JOB_KEYS:
             if key not in job_def:
-                issues.append(ValidationIssue("error", f"Job '{name}' missing required key: '{key}'"))
+                issues.append(
+                    ValidationIssue(
+                        "error", f"Job '{name}' missing required key: '{key}'"
+                    )
+                )
 
         steps = job_def.get("steps")
         if isinstance(steps, list):
             for i, step in enumerate(steps):
                 if not isinstance(step, dict):
-                    issues.append(ValidationIssue("error", f"Job '{name}' step {i} must be a mapping"))
+                    issues.append(
+                        ValidationIssue(
+                            "error", f"Job '{name}' step {i} must be a mapping"
+                        )
+                    )
                     continue
                 if "uses" not in step and "run" not in step:
-                    issues.append(ValidationIssue("warning", f"Job '{name}' step {i} has no 'uses' or 'run'"))
+                    issues.append(
+                        ValidationIssue(
+                            "warning", f"Job '{name}' step {i} has no 'uses' or 'run'"
+                        )
+                    )
 
         runner = job_def.get("runs-on")
         if isinstance(runner, str):
             valid_runners = {
-                "ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04",
-                "windows-latest", "macos-latest", "macos-14", "self-hosted",
+                "ubuntu-latest",
+                "ubuntu-22.04",
+                "ubuntu-24.04",
+                "windows-latest",
+                "macos-latest",
+                "macos-14",
+                "self-hosted",
             }
             if runner not in valid_runners and not runner.startswith("${{"):
-                issues.append(ValidationIssue("info", f"Job '{name}' uses non-standard runner: '{runner}'"))
+                issues.append(
+                    ValidationIssue(
+                        "info", f"Job '{name}' uses non-standard runner: '{runner}'"
+                    )
+                )
 
         return issues
 
@@ -106,6 +140,7 @@ class ValidatorAgent:
 
         try:
             import asyncio
+
             from copilot import CopilotClient
 
             async def _ai_validate():

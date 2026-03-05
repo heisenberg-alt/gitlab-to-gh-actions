@@ -62,6 +62,7 @@ class OptimizerAgent:
         report = self.optimize(content)
         try:
             import asyncio
+
             from copilot import CopilotClient
 
             async def _ai_optimize():
@@ -124,7 +125,10 @@ class OptimizerAgent:
             score += 10
         if any(isinstance(j, dict) and j.get("timeout-minutes") for j in jobs.values()):
             score += 5
-        if any(isinstance(j, dict) and j.get("strategy", {}).get("matrix") for j in jobs.values()):
+        if any(
+            isinstance(j, dict) and j.get("strategy", {}).get("matrix")
+            for j in jobs.values()
+        ):
             score += 5
         return min(score, 100)
 
@@ -136,21 +140,33 @@ class OptimizerAgent:
             for step in job_def.get("steps", [])
         )
         if not has_cache and len(jobs) > 0:
-            report.optimizations.append(Optimization(
-                category="caching",
-                description="No caching detected. Add actions/cache@v4 for dependencies.",
-            ))
+            report.optimizations.append(
+                Optimization(
+                    category="caching",
+                    description=(
+                        "No caching detected. Add actions/cache@v4 for dependencies."
+                    ),
+                )
+            )
 
-    def _check_parallelism(self, jobs: dict[str, Any], report: OptimizationReport) -> None:
+    def _check_parallelism(
+        self, jobs: dict[str, Any], report: OptimizationReport
+    ) -> None:
         independent = [
-            name for name, job in jobs.items()
+            name
+            for name, job in jobs.items()
             if isinstance(job, dict) and not job.get("needs")
         ]
         if len(independent) > 2:
-            report.optimizations.append(Optimization(
-                category="parallelism",
-                description=f"{len(independent)} jobs have no dependencies - verify this is intentional.",
-            ))
+            report.optimizations.append(
+                Optimization(
+                    category="parallelism",
+                    description=(
+                        f"{len(independent)} jobs have no "
+                        "dependencies - verify this is intentional."
+                    ),
+                )
+            )
 
     def _check_checkout(self, jobs: dict[str, Any], report: OptimizationReport) -> None:
         for job_name, job_def in jobs.items():
@@ -162,23 +178,33 @@ class OptimizerAgent:
                 for s in steps
             )
             if not has_checkout:
-                report.optimizations.append(Optimization(
-                    category="correctness",
-                    description=f"Job '{job_name}' has no checkout step.",
-                ))
+                report.optimizations.append(
+                    Optimization(
+                        category="correctness",
+                        description=f"Job '{job_name}' has no checkout step.",
+                    )
+                )
 
-    def _check_concurrency(self, workflow: dict[str, Any], report: OptimizationReport) -> None:
+    def _check_concurrency(
+        self, workflow: dict[str, Any], report: OptimizationReport
+    ) -> None:
         if "concurrency" not in workflow:
-            report.optimizations.append(Optimization(
-                category="cost",
-                description="Add concurrency group to cancel redundant runs.",
-            ))
+            report.optimizations.append(
+                Optimization(
+                    category="cost",
+                    description="Add concurrency group to cancel redundant runs.",
+                )
+            )
 
     def _check_timeout(self, jobs: dict[str, Any], report: OptimizationReport) -> None:
         for job_name, job_def in jobs.items():
             if isinstance(job_def, dict) and "timeout-minutes" not in job_def:
-                report.optimizations.append(Optimization(
-                    category="cost",
-                    description=f"Job '{job_name}' has no timeout (default is 6 hours).",
-                ))
+                report.optimizations.append(
+                    Optimization(
+                        category="cost",
+                        description=(
+                            f"Job '{job_name}' has no timeout (default is 6 hours)."
+                        ),
+                    )
+                )
                 break

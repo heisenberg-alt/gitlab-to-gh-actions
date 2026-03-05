@@ -1,6 +1,5 @@
 """Tests for GitLab CI parser."""
 
-import pytest
 from gl2gh.parser import GitLabCIParser
 
 
@@ -12,7 +11,9 @@ class TestGitLabCIParser:
         pipeline = self.parser.parse_string(simple_gitlab_ci)
         assert len(pipeline.stages) == 3
         assert "build" in pipeline.stages
-        non_template_jobs = {n: j for n, j in pipeline.jobs.items() if not j.is_template}
+        non_template_jobs = {
+            n: j for n, j in pipeline.jobs.items() if not j.is_template
+        }
         assert len(non_template_jobs) == 3
         assert "build" in non_template_jobs
         assert "test" in non_template_jobs

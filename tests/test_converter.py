@@ -1,9 +1,9 @@
 """Tests for the rule-based converter."""
 
 import yaml
-import pytest
-from gl2gh.parser import GitLabCIParser
+
 from gl2gh.converter import GitLabToGitHubConverter
+from gl2gh.parser import GitLabCIParser
 
 
 class TestGitLabToGitHubConverter:
@@ -23,7 +23,7 @@ class TestGitLabToGitHubConverter:
         result = self.converter.convert(pipeline)
         content = list(result.output_workflows.values())[0]
         # Skip comment header lines
-        yaml_lines = [l for l in content.split("\n") if not l.startswith("#")]
+        yaml_lines = [line for line in content.split("\n") if not line.startswith("#")]
         workflow = yaml.safe_load("\n".join(yaml_lines))
         assert "name" in workflow
         assert "on" in workflow
@@ -33,7 +33,7 @@ class TestGitLabToGitHubConverter:
         pipeline = self.parser.parse_string(simple_gitlab_ci)
         result = self.converter.convert(pipeline)
         content = list(result.output_workflows.values())[0]
-        yaml_lines = [l for l in content.split("\n") if not l.startswith("#")]
+        yaml_lines = [line for line in content.split("\n") if not line.startswith("#")]
         workflow = yaml.safe_load("\n".join(yaml_lines))
         for job_name, job_def in workflow["jobs"].items():
             assert "steps" in job_def

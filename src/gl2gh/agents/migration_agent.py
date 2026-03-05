@@ -1,4 +1,4 @@
-"""Migration Agent - Uses GitHub Copilot SDK with tool use to migrate GitLab CI to GitHub Actions."""
+"""Migration Agent - GitHub Copilot SDK with tool use for CI migration."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from gl2gh.models import ConversionResult, GitLabPipeline
 from gl2gh.converter import GitLabToGitHubConverter
+from gl2gh.models import ConversionResult, GitLabPipeline
 from gl2gh.utils.yaml_utils import add_yaml_header, validate_yaml_syntax
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class AddConversionNoteInput(BaseModel):
 
 
 class MigrationAgent:
-    """GitHub Copilot-powered migration agent for complex GitLab CI -> GitHub Actions conversions.
+    """Copilot-powered agent for GitLab CI -> GitHub Actions migration.
 
     Uses the GitHub Copilot SDK with tool use to:
     1. Analyze the GitLab CI pipeline structure
@@ -52,28 +52,33 @@ class MigrationAgent:
     4. Validate and fix the output
     """
 
-    SYSTEM_PROMPT = """You are an expert DevOps engineer specializing in CI/CD pipeline migration.
-Your task is to migrate GitLab CI/CD pipelines to GitHub Actions workflows.
-
-Key principles:
-1. Preserve all functionality from the original pipeline
-2. Use GitHub Actions best practices (checkout@v4, cache@v4, etc.)
-3. Map GitLab CI variables to GitHub Actions contexts correctly
-4. Handle complex patterns like templates, includes, matrix builds
-5. Add helpful comments explaining migration decisions
-6. Flag anything that needs manual review
-
-GitLab -> GitHub variable mappings:
-- $CI_COMMIT_SHA -> ${{ github.sha }}
-- $CI_COMMIT_REF_NAME -> ${{ github.ref_name }}
-- $CI_PROJECT_PATH -> ${{ github.repository }}
-- $CI_REGISTRY -> ghcr.io
-- $CI_REGISTRY_IMAGE -> ghcr.io/${{ github.repository }}
-- $CI_REGISTRY_USER -> ${{ github.actor }}
-- $CI_REGISTRY_PASSWORD -> ${{ secrets.GITHUB_TOKEN }}
-- $CI_PIPELINE_ID -> ${{ github.run_id }}
-
-Always output valid GitHub Actions YAML. Use tools to validate your work."""
+    SYSTEM_PROMPT = (
+        "You are an expert DevOps engineer specializing in "
+        "CI/CD pipeline migration.\n"
+        "Your task is to migrate GitLab CI/CD pipelines to "
+        "GitHub Actions workflows.\n\n"
+        "Key principles:\n"
+        "1. Preserve all functionality from the original pipeline\n"
+        "2. Use GitHub Actions best practices "
+        "(checkout@v4, cache@v4, etc.)\n"
+        "3. Map GitLab CI variables to GitHub Actions contexts "
+        "correctly\n"
+        "4. Handle complex patterns like templates, includes, "
+        "matrix builds\n"
+        "5. Add helpful comments explaining migration decisions\n"
+        "6. Flag anything that needs manual review\n\n"
+        "GitLab -> GitHub variable mappings:\n"
+        "- $CI_COMMIT_SHA -> ${{ github.sha }}\n"
+        "- $CI_COMMIT_REF_NAME -> ${{ github.ref_name }}\n"
+        "- $CI_PROJECT_PATH -> ${{ github.repository }}\n"
+        "- $CI_REGISTRY -> ghcr.io\n"
+        "- $CI_REGISTRY_IMAGE -> ghcr.io/${{ github.repository }}\n"
+        "- $CI_REGISTRY_USER -> ${{ github.actor }}\n"
+        "- $CI_REGISTRY_PASSWORD -> ${{ secrets.GITHUB_TOKEN }}\n"
+        "- $CI_PIPELINE_ID -> ${{ github.run_id }}\n\n"
+        "Always output valid GitHub Actions YAML. "
+        "Use tools to validate your work."
+    )
 
     def __init__(
         self,
@@ -144,9 +149,7 @@ Always output valid GitHub Actions YAML. Use tools to validate your work."""
     async def _migrate_repository_async(self, source_repo, target_repo, branch):
         from copilot import CopilotClient
 
-        client = CopilotClient(
-            {"github_token": self.github_token, "auto_start": True}
-        )
+        client = CopilotClient({"github_token": self.github_token, "auto_start": True})
         await client.start()
 
         session = await client.create_session(
@@ -246,16 +249,19 @@ Always output valid GitHub Actions YAML. Use tools to validate your work."""
             result.conversion_notes.append(params.note)
             return json.dumps({"added": True})
 
-        client = CopilotClient(
-            {"github_token": self.github_token, "auto_start": True}
-        )
+        client = CopilotClient({"github_token": self.github_token, "auto_start": True})
         await client.start()
 
         session = await client.create_session(
             {
                 "model": self.model,
                 "streaming": False,
-                "tools": [validate_yaml, save_workflow, add_warning, add_conversion_note],
+                "tools": [
+                    validate_yaml,
+                    save_workflow,
+                    add_warning,
+                    add_conversion_note,
+                ],
                 "system_message": self.SYSTEM_PROMPT,
             }
         )
