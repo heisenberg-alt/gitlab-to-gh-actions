@@ -64,6 +64,62 @@ class GitLabToGitHubConverter:
 
         return result
 
+    # Quality threshold: below this score, suggest --ai mode
+    QUALITY_THRESHOLD = 60
+
+    def convert_enhanced(self, pipeline: GitLabPipeline) -> ConversionResult:
+        """Rule-based conversion followed by validation and optimization checks.
+
+        Runs the standard rule-based converter, then passes the output through
+        the ValidatorAgent (static) and OptimizerAgent (static) to catch issues
+        and score the result.  If the score falls below QUALITY_THRESHOLD, a
+        note is added suggesting the user try --ai mode.
+        """
+        result = self.convert(pipeline)
+        if not result.success:
+            return result
+
+        from gl2gh.agents.optimizer_agent import OptimizerAgent
+        from gl2gh.agents.validator_agent import ValidatorAgent
+
+        validator = ValidatorAgent()
+        optimizer = OptimizerAgent()
+
+        for _filename, content in result.output_workflows.items():
+            # --- Validation ---
+            issues = validator.validate_static(content)
+            for issue in issues:
+                msg = f"[{issue.severity.upper()}] {issue.message}"
+                if issue.severity == "error":
+                    result.validation_issues.append(msg)
+                    result.warnings.append(f"Validation: {issue.message}")
+                elif issue.severity == "warning":
+                    result.validation_issues.append(msg)
+                    result.warnings.append(f"Validation: {issue.message}")
+                else:
+                    result.validation_issues.append(msg)
+
+            # --- Optimization ---
+            report = optimizer.optimize(content)
+            result.optimization_score = report.score_before
+            for opt in report.optimizations:
+                result.conversion_notes.append(
+                    f"Optimization ({opt.category}): {opt.description}"
+                )
+
+        if (
+            result.optimization_score is not None
+            and result.optimization_score < self.QUALITY_THRESHOLD
+        ):
+            result.conversion_notes.append(
+                "The workflow scored {}/100. Consider using --ai mode for "
+                "better results: gl2gh migrate --ai".format(
+                    result.optimization_score
+                )
+            )
+
+        return result
+
     def _workflow_filename(self) -> str:
         slug = self.workflow_name.lower().replace(" ", "-").replace("/", "-")
         return f"{slug}.yml"

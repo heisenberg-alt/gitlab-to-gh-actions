@@ -118,6 +118,48 @@ deploy_child:
         child_content = result.output_workflows[child_keys[0]]
         assert "workflow_call" in child_content
 
+
+class TestConvertEnhanced:
+    """Tests for convert_enhanced (validation + optimization post-processing)."""
+
+    def setup_method(self):
+        self.parser = GitLabCIParser()
+        self.converter = GitLabToGitHubConverter()
+
+    def test_enhanced_returns_optimization_score(self, simple_gitlab_ci):
+        pipeline = self.parser.parse_string(simple_gitlab_ci)
+        result = self.converter.convert_enhanced(pipeline)
+        assert result.success
+        assert result.optimization_score is not None
+        assert 0 <= result.optimization_score <= 100
+
+    def test_enhanced_populates_validation_issues(self, simple_gitlab_ci):
+        pipeline = self.parser.parse_string(simple_gitlab_ci)
+        result = self.converter.convert_enhanced(pipeline)
+        assert result.success
+        # validation_issues is a list (may be empty for clean workflows)
+        assert isinstance(result.validation_issues, list)
+
+    def test_enhanced_adds_conversion_notes(self, simple_gitlab_ci):
+        pipeline = self.parser.parse_string(simple_gitlab_ci)
+        result = self.converter.convert_enhanced(pipeline)
+        assert result.success
+        # Should have at least one optimization note
+        assert len(result.conversion_notes) > 0
+
+    def test_enhanced_empty_pipeline_still_fails(self):
+        pipeline = self.parser.parse_string("variables:\n  FOO: bar")
+        result = self.converter.convert_enhanced(pipeline)
+        assert not result.success
+        # Should not have optimization_score since conversion itself failed
+        assert result.optimization_score is None
+
+    def test_enhanced_low_score_suggests_ai(self, simple_gitlab_ci):
+        pipeline = self.parser.parse_string(simple_gitlab_ci)
+        result = self.converter.convert_enhanced(pipeline)
+        if result.optimization_score is not None and result.optimization_score < 60:
+            assert any("--ai" in note for note in result.conversion_notes)
+
     def test_trigger_cross_project(self):
         """trigger: project: generates a uses: reference without child file."""
         content = """

@@ -105,6 +105,8 @@ class ConversionResult:
     unsupported_features: list[str] = field(default_factory=list)
     ai_enhanced: bool = False
     conversion_notes: list[str] = field(default_factory=list)
+    optimization_score: Optional[int] = None
+    validation_issues: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:

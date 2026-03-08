@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gl2gh - Documentation</title>
+    <meta name="description" content="Complete documentation for gl2gh — the GitLab CI/CD to GitHub Actions migration tool.">
+    <style>
+        /* ============================================================
+           Reset and Base (shared with index.html)
+           ============================================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #1c2128;
+            --bg-card: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #bc8cff;
+            --accent-orange: #d29922;
+            --accent-pink: #f778ba;
+            --gradient-start: #1a1f36;
+            --gradient-end: #0d1117;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        a { color: var(--accent-blue); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ============================================================
+           Navigation
+           ============================================================ */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .nav-logo span { color: var(--accent-blue); }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .nav-links a.active { color: var(--accent-blue); }
+
+        /* ============================================================
+           Page Header
+           ============================================================ */
+        .page-header {
+            padding: 120px 0 40px;
+            text-align: center;
+            background: linear-gradient(180deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page-header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 400px;
+            background: radial-gradient(ellipse at center, rgba(88, 166, 255, 0.07) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .page-header h1 {
+            font-size: 40px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 12px;
+        }
+
+        .page-header h1 .highlight {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-header p {
+            font-size: 17px;
+            color: var(--text-secondary);
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        /* ============================================================
+           Docs Layout — sidebar + content
+           ============================================================ */
+        .docs-layout {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 48px;
+            padding: 48px 0 80px;
+            flex: 1;
+        }
+
+        /* Sidebar */
+        .docs-sidebar {
+            position: sticky;
+            top: 80px;
+            align-self: start;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+            padding-right: 16px;
+            scrollbar-width: none;           /* Firefox */
+            -ms-overflow-style: none;        /* IE/Edge */
+        }
+
+        .docs-sidebar::-webkit-scrollbar {
+            display: none;                   /* Chrome/Safari */
+        }
+
+        .sidebar-group {
+            margin-bottom: 28px;
+        }
+
+        .sidebar-group-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .sidebar-group ul {
+            list-style: none;
+        }
+
+        .sidebar-group li {
+            margin-bottom: 2px;
+        }
+
+        .sidebar-group a {
+            display: block;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+        }
+
+        .sidebar-group a:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            text-decoration: none;
+        }
+
+        .sidebar-group a.active {
+            color: var(--accent-blue);
+            background: rgba(88, 166, 255, 0.08);
+        }
+
+        /* Content */
+        .docs-content {
+            min-width: 0;
+        }
+
+        .docs-content h2 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .docs-content h2:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        .docs-content h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 32px;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .docs-content p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+
+        .docs-content ul, .docs-content ol {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            padding-left: 24px;
+        }
+
+        .docs-content li {
+            margin-bottom: 6px;
+            line-height: 1.7;
+        }
+
+        .docs-content strong {
+            color: var(--text-primary);
+        }
+
+        /* Code blocks */
+        .code-block {
+            position: relative;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .code-block-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 16px 20px;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .copy-code-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-muted);
+            font-size: 11px;
+            padding: 2px 8px;
+            cursor: pointer;
+            font-family: var(--font-sans);
+            transition: all 0.15s;
+        }
+
+        .copy-code-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-muted);
+        }
+
+        /* Tables */
+        .docs-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+            font-size: 14px;
+        }
+
+        .docs-table th {
+            text-align: left;
+            padding: 10px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+
+        .docs-table td {
+            padding: 10px 16px;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .docs-table tr:hover td {
+            background: rgba(88, 166, 255, 0.03);
+        }
+
+        .docs-table code {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--accent-blue);
+        }
+
+        /* Inline code */
+        .docs-content code {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--accent-blue);
+        }
+
+        /* Callout boxes */
+        .callout {
+            display: flex;
+            gap: 12px;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border: 1px solid transparent;
+        }
+
+        .callout-icon {
+            flex-shrink: 0;
+            font-size: 16px;
+            margin-top: 1px;
+        }
+
+        .callout-info {
+            background: rgba(88, 166, 255, 0.08);
+            border-color: rgba(88, 166, 255, 0.2);
+            color: #79c0ff;
+        }
+
+        .callout-warning {
+            background: rgba(210, 153, 34, 0.08);
+            border-color: rgba(210, 153, 34, 0.2);
+            color: #e3b341;
+        }
+
+        .callout-success {
+            background: rgba(63, 185, 80, 0.08);
+            border-color: rgba(63, 185, 80, 0.2);
+            color: #56d364;
+        }
+
+        /* Pipeline flow diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 20px 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+
+        .flow-step {
+            padding: 8px 16px;
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+
+        .flow-arrow {
+            color: var(--text-muted);
+            font-size: 18px;
+        }
+
+        /* ============================================================
+           Footer
+           ============================================================ */
+        footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 40px 0;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+
+        .footer-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .footer-logo span { color: var(--accent-blue); }
+
+        .footer-text {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .footer-links a:hover { color: var(--text-primary); }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 900px) {
+            .docs-layout {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .docs-sidebar {
+                position: static;
+                max-height: none;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 24px;
+                margin-bottom: 32px;
+                padding-right: 0;
+            }
+
+            .page-header h1 { font-size: 28px; }
+
+            .nav-links { display: none; }
+
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .docs-table { font-size: 12px; }
+            .docs-table td, .docs-table th { padding: 8px 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="container">
+            <a href="index.html" class="nav-logo" style="text-decoration:none;"><span>gl</span>2gh</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#how-it-works">How It Works</a></li>
+                <li><a href="index.html#quickstart">Quick Start</a></li>
+                <li><a href="converter.html">Converter</a></li>
+                <li><a href="docs.html" class="active">Docs</a></li>
+                <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container">
+            <h1><span class="highlight">Documentation</span></h1>
+            <p>Everything you need to install, configure, and use gl2gh for migrating GitLab CI/CD pipelines to GitHub Actions.</p>
+        </div>
+    </div>
+
+    <!-- Docs Body -->
+    <div class="container">
+        <div class="docs-layout">
+
+            <!-- Sidebar -->
+            <aside class="docs-sidebar">
+                <div class="sidebar-group">
+                    <div class="sidebar-group-title">Getting Started</div>
+                    <ul>
+                        <li><a href="#prerequisites">Prerequisites</a></li>
+                        <li><a href="#installation">Installation</a></li>
+                        <li><a href="#quick-start">Quick Start</a></li>
+                    </ul>
+                </div>
+                <div class="sidebar-group">
+                    <div class="sidebar-group-title">CLI Reference</div>
+                    <ul>
+                        <li><a href="#migrate">migrate</a></li>
+                        <li><a href="#inspect">inspect</a></li>
+                        <li><a href="#validate">validate</a></li>
+                        <li><a href="#migrate-repo">migrate-repo</a></li>
+                        <li><a href="#gh-status">gh-status</a></li>
+                    </ul>
+                </div>
+                <div class="sidebar-group">
+                    <div class="sidebar-group-title">Conversion</div>
+                    <ul>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#variable-mapping">Variable Mapping</a></li>
+                        <li><a href="#concept-mapping">Concept Mapping</a></li>
+                        <li><a href="#triggers">Triggers &amp; Events</a></li>
+                    </ul>
+                </div>
+                <div class="sidebar-group">
+                    <div class="sidebar-group-title">AI &amp; Agents</div>
+                    <ul>
+                        <li><a href="#ai-mode">AI-Enhanced Mode</a></li>
+                        <li><a href="#validator-agent">Validator Agent</a></li>
+                        <li><a href="#optimizer-agent">Optimizer Agent</a></li>
+                        <li><a href="#quality-score">Quality Score</a></li>
+                    </ul>
+                </div>
+                <div class="sidebar-group">
+                    <div class="sidebar-group-title">Reference</div>
+                    <ul>
+                        <li><a href="#configuration">Configuration</a></li>
+                        <li><a href="#web-api">Web API</a></li>
+                        <li><a href="#project-structure">Project Structure</a></li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="docs-content">
+
+                <!-- ── PREREQUISITES ────────────────────────────── -->
+                <h2 id="prerequisites">Prerequisites</h2>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Tool</th>
+                            <th>Version</th>
+                            <th>Required</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Python</td>
+                            <td>3.11+</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td>pip</td>
+                            <td>Latest</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td><code>gh</code> CLI</td>
+                            <td>2.0+</td>
+                            <td>Optional &mdash; for GitHub workflow operations</td>
+                        </tr>
+                        <tr>
+                            <td><code>GITHUB_TOKEN</code></td>
+                            <td>&mdash;</td>
+                            <td>For <code>--ai</code> mode only (needs Copilot access)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- ── INSTALLATION ─────────────────────────────── -->
+                <h2 id="installation">Installation</h2>
+                <h3>From source</h3>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>git clone https://github.com/heisenberg-alt/gitlab-to-gh-actions.git
+cd gitlab-to-gh-actions
+pip install -e ".[dev]"</pre>
+                </div>
+
+                <h3>From PyPI (when published)</h3>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>pip install gl2gh</pre>
+                </div>
+
+                <h3>Verify</h3>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>gl2gh --version
+# gl2gh, version 1.0.0</pre>
+                </div>
+
+                <!-- ── QUICK START ──────────────────────────────── -->
+                <h2 id="quick-start">Quick Start</h2>
+                <p>Migrate a GitLab CI pipeline in three steps:</p>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre># 1. Convert your pipeline
+gl2gh migrate .gitlab-ci.yml
+
+# 2. Review the generated workflow
+cat .github/workflows/ci.yml
+
+# 3. Validate the output
+gl2gh validate .github/workflows/</pre>
+                </div>
+                <div class="callout callout-info">
+                    <span class="callout-icon">&#x2139;</span>
+                    <div>By default, <code>migrate</code> runs validation and optimization checks after conversion. Use <code>--pure-rules</code> to skip those checks, or <code>--ai</code> for full AI-enhanced migration.</div>
+                </div>
+
+                <!-- ── CLI: MIGRATE ─────────────────────────────── -->
+                <h2 id="migrate">CLI: <code>migrate</code></h2>
+                <p>The primary command. Reads a <code>.gitlab-ci.yml</code> file and produces GitHub Actions workflow files.</p>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Usage</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>gl2gh migrate [OPTIONS] [INPUT_FILE]</pre>
+                </div>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Option</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>INPUT_FILE</code></td>
+                            <td><code>.gitlab-ci.yml</code></td>
+                            <td>Path to the GitLab CI pipeline file</td>
+                        </tr>
+                        <tr>
+                            <td><code>-o, --output-dir</code></td>
+                            <td><code>.github/workflows</code></td>
+                            <td>Directory for generated workflow files</td>
+                        </tr>
+                        <tr>
+                            <td><code>-n, --name</code></td>
+                            <td><code>CI</code></td>
+                            <td>Name of the generated workflow</td>
+                        </tr>
+                        <tr>
+                            <td><code>--ai</code></td>
+                            <td>off</td>
+                            <td>Use GitHub Copilot AI for enhanced conversion</td>
+                        </tr>
+                        <tr>
+                            <td><code>--pure-rules</code></td>
+                            <td>off</td>
+                            <td>Skip validation &amp; optimization (pure rule-based)</td>
+                        </tr>
+                        <tr>
+                            <td><code>--model</code></td>
+                            <td><code>gpt-4.1</code></td>
+                            <td>AI model when using <code>--ai</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>--dry-run</code></td>
+                            <td>off</td>
+                            <td>Print output without writing files</td>
+                        </tr>
+                        <tr>
+                            <td><code>-v, --verbose</code></td>
+                            <td>off</td>
+                            <td>Show detailed conversion info</td>
+                        </tr>
+                        <tr>
+                            <td><code>--format</code></td>
+                            <td><code>yaml</code></td>
+                            <td>Output format: <code>yaml</code> or <code>json</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <h3>Examples</h3>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre># Basic conversion with validation + optimization
+gl2gh migrate .gitlab-ci.yml
+
+# AI-enhanced conversion
+gl2gh migrate .gitlab-ci.yml --ai
+
+# Pure rule-based (no agent checks)
+gl2gh migrate .gitlab-ci.yml --pure-rules
+
+# Preview without writing files
+gl2gh migrate .gitlab-ci.yml --dry-run --verbose
+
+# Custom workflow name and output
+gl2gh migrate .gitlab-ci.yml -n "Build &amp; Deploy" -o workflows/</pre>
+                </div>
+
+                <!-- ── CLI: INSPECT ─────────────────────────────── -->
+                <h2 id="inspect">CLI: <code>inspect</code></h2>
+                <p>Analyze a GitLab CI pipeline without converting it. Shows stages, jobs, variables, templates, and includes.</p>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>gl2gh inspect .gitlab-ci.yml
+gl2gh inspect .gitlab-ci.yml --verbose   # includes per-job details</pre>
+                </div>
+
+                <!-- ── CLI: VALIDATE ────────────────────────────── -->
+                <h2 id="validate">CLI: <code>validate</code></h2>
+                <p>Validate generated GitHub Actions YAML files for syntax correctness.</p>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>gl2gh validate .github/workflows/</pre>
+                </div>
+
+                <!-- ── CLI: MIGRATE-REPO ────────────────────────── -->
+                <h2 id="migrate-repo">CLI: <code>migrate-repo</code></h2>
+                <p>Full repository migration from GitLab to GitHub. Uses <code>gh</code> CLI for GitHub operations when available.</p>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>gl2gh migrate-repo git@gitlab.com:org/repo.git org/new-repo
+gl2gh migrate-repo git@gitlab.com:org/repo.git org/new-repo --ai</pre>
+                </div>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Option</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>SOURCE_GITLAB_REPO</code></td>
+                            <td>&mdash;</td>
+                            <td>GitLab repository URL or path</td>
+                        </tr>
+                        <tr>
+                            <td><code>TARGET_GITHUB_REPO</code></td>
+                            <td>&mdash;</td>
+                            <td>Target GitHub repository</td>
+                        </tr>
+                        <tr>
+                            <td><code>--branch</code></td>
+                            <td><code>main</code></td>
+                            <td>Branch to push</td>
+                        </tr>
+                        <tr>
+                            <td><code>--ai</code></td>
+                            <td>off</td>
+                            <td>Use AI-enhanced migration</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- ── CLI: GH-STATUS ───────────────────────────── -->
+                <h2 id="gh-status">CLI: <code>gh-status</code></h2>
+                <p>Check <code>gh</code> CLI and GitHub Copilot CLI availability, and list active workflows.</p>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>gl2gh gh-status</pre>
+                </div>
+
+                <!-- ── HOW IT WORKS ─────────────────────────────── -->
+                <h2 id="how-it-works">How It Works</h2>
+                <p>gl2gh uses a <strong>hybrid approach</strong>: deterministic rule-based translation for common CI constructs, and AI-powered agents for complex patterns.</p>
+
+                <div class="flow-diagram">
+                    <span class="flow-step">Parse YAML</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Build Models</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Rule-Based Convert</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Validate</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Optimize</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Output YAML</span>
+                </div>
+
+                <ol>
+                    <li><strong>Parse</strong> &mdash; <code>GitLabCIParser</code> reads the <code>.gitlab-ci.yml</code> using <code>ruamel.yaml</code> (preserves anchors &amp; aliases). Resolves <code>extends</code> templates at parse time.</li>
+                    <li><strong>Model</strong> &mdash; Parsed data is mapped into typed Python dataclasses (<code>GitLabPipeline</code>, <code>GitLabJob</code>, etc.) as an intermediate representation.</li>
+                    <li><strong>Convert</strong> &mdash; <code>GitLabToGitHubConverter</code> applies 30+ pure mapping rules to translate variables, stages, cache, artifacts, triggers, and more.</li>
+                    <li><strong>Validate</strong> &mdash; <code>ValidatorAgent</code> runs static checks &mdash; YAML syntax, required keys, job structure, and 9 security injection pattern detections.</li>
+                    <li><strong>Optimize</strong> &mdash; <code>OptimizerAgent</code> scores the workflow (0&ndash;100) and suggests improvements for caching, parallelism, concurrency, and timeouts.</li>
+                    <li><strong>Output</strong> &mdash; Final YAML is written to <code>.github/workflows/</code> with a source-tracking header comment.</li>
+                </ol>
+
+                <!-- ── VARIABLE MAPPING ─────────────────────────── -->
+                <h2 id="variable-mapping">Variable Mapping</h2>
+                <p>gl2gh automatically translates GitLab CI predefined variables to their GitHub Actions equivalents. Over 25 variables are mapped.</p>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>GitLab CI Variable</th>
+                            <th>GitHub Actions Equivalent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>$CI_COMMIT_SHA</code></td><td><code>${{ github.sha }}</code></td></tr>
+                        <tr><td><code>$CI_COMMIT_REF_NAME</code></td><td><code>${{ github.ref_name }}</code></td></tr>
+                        <tr><td><code>$CI_COMMIT_BRANCH</code></td><td><code>${{ github.ref_name }}</code></td></tr>
+                        <tr><td><code>$CI_DEFAULT_BRANCH</code></td><td><code>${{ github.event.repository.default_branch }}</code></td></tr>
+                        <tr><td><code>$CI_PIPELINE_ID</code></td><td><code>${{ github.run_id }}</code></td></tr>
+                        <tr><td><code>$CI_PROJECT_NAME</code></td><td><code>${{ github.event.repository.name }}</code></td></tr>
+                        <tr><td><code>$CI_PROJECT_PATH</code></td><td><code>${{ github.repository }}</code></td></tr>
+                        <tr><td><code>$CI_PROJECT_URL</code></td><td><code>${{ github.event.repository.html_url }}</code></td></tr>
+                        <tr><td><code>$CI_REGISTRY_IMAGE</code></td><td><code>ghcr.io/${{ github.repository }}</code></td></tr>
+                        <tr><td><code>$CI_REGISTRY_USER</code></td><td><code>${{ github.actor }}</code></td></tr>
+                        <tr><td><code>$CI_REGISTRY_PASSWORD</code></td><td><code>${{ secrets.GITHUB_TOKEN }}</code></td></tr>
+                        <tr><td><code>$CI_MERGE_REQUEST_IID</code></td><td><code>${{ github.event.pull_request.number }}</code></td></tr>
+                        <tr><td><code>$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME</code></td><td><code>${{ github.head_ref }}</code></td></tr>
+                        <tr><td><code>$CI_MERGE_REQUEST_TARGET_BRANCH_NAME</code></td><td><code>${{ github.base_ref }}</code></td></tr>
+                        <tr><td><code>$CI_COMMIT_TAG</code></td><td><code>${{ github.ref_name }}</code></td></tr>
+                        <tr><td><code>$CI_PROJECT_DIR</code></td><td><code>${{ github.workspace }}</code></td></tr>
+                    </tbody>
+                </table>
+
+                <!-- ── CONCEPT MAPPING ──────────────────────────── -->
+                <h2 id="concept-mapping">Concept Mapping</h2>
+                <p>How GitLab CI concepts translate to GitHub Actions:</p>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>GitLab CI</th>
+                            <th>GitHub Actions</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>stages</code></td><td><code>needs</code> graph</td><td>Sequential stages become explicit job dependencies</td></tr>
+                        <tr><td><code>image</code></td><td><code>runs-on</code> + container</td><td>Common images mapped to runners; custom images use container</td></tr>
+                        <tr><td><code>services</code></td><td><code>services</code></td><td>Docker service containers</td></tr>
+                        <tr><td><code>cache</code></td><td><code>actions/cache@v4</code></td><td>Cache key variables auto-translated</td></tr>
+                        <tr><td><code>artifacts</code></td><td><code>actions/upload-artifact@v4</code></td><td>Paths and expiry preserved</td></tr>
+                        <tr><td><code>only/except</code></td><td><code>on</code> triggers + <code>if</code></td><td>Branch filters become push/PR triggers</td></tr>
+                        <tr><td><code>rules</code></td><td><code>if</code> conditions</td><td>Rule conditions translated to expression syntax</td></tr>
+                        <tr><td><code>extends</code></td><td>Resolved at parse time</td><td>Templates merged into jobs before conversion</td></tr>
+                        <tr><td><code>trigger: include</code></td><td>Reusable workflows</td><td>Child pipelines become <code>workflow_call</code> + caller jobs</td></tr>
+                        <tr><td><code>environment</code></td><td><code>environment</code></td><td>Name and URL preserved</td></tr>
+                        <tr><td><code>allow_failure</code></td><td><code>continue-on-error</code></td><td>Direct mapping</td></tr>
+                        <tr><td><code>timeout</code></td><td><code>timeout-minutes</code></td><td>Parsed from GitLab duration format</td></tr>
+                        <tr><td><code>retry</code></td><td>Retry in step</td><td>Max attempts translated</td></tr>
+                        <tr><td><code>parallel: matrix</code></td><td><code>strategy.matrix</code></td><td>Matrix builds preserved</td></tr>
+                        <tr><td><code>when: manual</code></td><td><code>workflow_dispatch</code></td><td>Manual triggers</td></tr>
+                        <tr><td><code>variables</code></td><td><code>env</code></td><td>Global and job-level variables with value translation</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- ── TRIGGERS ─────────────────────────────────── -->
+                <h2 id="triggers">Triggers &amp; Events</h2>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>GitLab <code>only/except</code></th>
+                            <th>GitHub Actions <code>on</code></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>branches</code></td><td><code>push: branches</code></td></tr>
+                        <tr><td><code>tags</code></td><td><code>push: tags</code></td></tr>
+                        <tr><td><code>merge_requests</code></td><td><code>pull_request</code></td></tr>
+                        <tr><td><code>schedules</code></td><td><code>schedule: cron</code></td></tr>
+                        <tr><td><code>web</code> / <code>api</code> / <code>triggers</code></td><td><code>workflow_dispatch</code></td></tr>
+                        <tr><td>Specific branch name (e.g. <code>main</code>)</td><td><code>push: branches: [main]</code></td></tr>
+                    </tbody>
+                </table>
+
+                <!-- ── AI MODE ──────────────────────────────────── -->
+                <h2 id="ai-mode">AI-Enhanced Mode</h2>
+                <p>When <code>--ai</code> is passed, gl2gh uses <strong>GitHub Copilot</strong> (via the Chat API) to handle complex patterns that lack direct one-to-one mappings:</p>
+                <ul>
+                    <li>Multi-project pipelines</li>
+                    <li>Advanced <code>rules:</code> conditions with complex logic</li>
+                    <li>Custom runner configurations</li>
+                    <li>Complex <code>extends</code> chains</li>
+                    <li>Dynamic child pipelines</li>
+                </ul>
+
+                <div class="flow-diagram">
+                    <span class="flow-step">Rule-Based Baseline</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Send to Copilot</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Tool-Use Loop (up to 8 iterations)</span>
+                    <span class="flow-arrow">&rarr;</span>
+                    <span class="flow-step">Enhanced Result</span>
+                </div>
+
+                <div class="callout callout-warning">
+                    <span class="callout-icon">&#x26A0;</span>
+                    <div>Requires <code>GITHUB_TOKEN</code> with Copilot access. If AI enhancement fails, the tool falls back to the rule-based result with a warning.</div>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>export GITHUB_TOKEN=ghp_...
+gl2gh migrate .gitlab-ci.yml --ai --verbose</pre>
+                </div>
+
+                <!-- ── VALIDATOR AGENT ──────────────────────────── -->
+                <h2 id="validator-agent">Validator Agent</h2>
+                <p>The Validator Agent runs automatically on every conversion (unless <code>--pure-rules</code> is set). It performs static analysis on the generated workflow:</p>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Check</th>
+                            <th>Severity</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>YAML syntax</td><td>Error</td><td>Ensures valid YAML output</td></tr>
+                        <tr><td>Required keys</td><td>Error</td><td>Checks for <code>name</code>, <code>on</code>, <code>jobs</code></td></tr>
+                        <tr><td>Job structure</td><td>Error</td><td>Each job must have <code>runs-on</code> and <code>steps</code></td></tr>
+                        <tr><td>Caller jobs</td><td>OK</td><td>Reusable workflow callers (<code>uses:</code>) skip runs-on check</td></tr>
+                        <tr><td>Security: expression injection</td><td>Warning</td><td>Detects 9 known injection patterns (e.g. <code>github.event.issue.title</code>)</td></tr>
+                        <tr><td>Non-standard runners</td><td>Info</td><td>Flags custom runner labels</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- ── OPTIMIZER AGENT ──────────────────────────── -->
+                <h2 id="optimizer-agent">Optimizer Agent</h2>
+                <p>The Optimizer Agent scores your workflow and suggests improvements:</p>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Points</th>
+                            <th>What It Checks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Baseline</td><td>50</td><td>Starting score for any valid workflow</td></tr>
+                        <tr><td>Caching</td><td>+10</td><td>Presence of <code>actions/cache</code> or <code>setup-*</code> with cache</td></tr>
+                        <tr><td>Concurrency</td><td>+10</td><td><code>concurrency</code> key to cancel redundant runs</td></tr>
+                        <tr><td>Parallelism</td><td>+10</td><td>Multiple independent jobs that can run in parallel</td></tr>
+                        <tr><td>Checkout</td><td>+5</td><td><code>actions/checkout@v4</code> present in every job</td></tr>
+                        <tr><td>Timeout</td><td>+5</td><td><code>timeout-minutes</code> set on jobs</td></tr>
+                        <tr><td>Matrix builds</td><td>+5</td><td><code>strategy.matrix</code> for multi-version testing</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- ── QUALITY SCORE ────────────────────────────── -->
+                <h2 id="quality-score">Quality Score</h2>
+                <p>After conversion, gl2gh displays a quality score from 0 to 100:</p>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Score</th>
+                            <th>Rating</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td style="color:#3fb950;font-weight:600;">70&ndash;100</td><td>Good</td><td>Workflow is well-optimized</td></tr>
+                        <tr><td style="color:#d29922;font-weight:600;">50&ndash;69</td><td>Fair</td><td>Consider applying suggested optimizations</td></tr>
+                        <tr><td style="color:#f85149;font-weight:600;">0&ndash;49</td><td>Needs work</td><td>Try <code>--ai</code> mode for better results</td></tr>
+                    </tbody>
+                </table>
+                <div class="callout callout-success">
+                    <span class="callout-icon">&#x2714;</span>
+                    <div>If the score falls below <strong>60</strong>, gl2gh automatically suggests using <code>--ai</code> mode in the conversion notes.</div>
+                </div>
+
+                <!-- ── CONFIGURATION ────────────────────────────── -->
+                <h2 id="configuration">Configuration</h2>
+                <p>All configuration is via environment variables. Sensible defaults work for most cases.</p>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>GITHUB_TOKEN</code></td><td>&mdash;</td><td>GitHub token for AI mode (needs Copilot access)</td></tr>
+                        <tr><td><code>GL2GH_MODEL</code></td><td><code>gpt-4.1</code></td><td>AI model override</td></tr>
+                        <tr><td><code>GL2GH_LOG_LEVEL</code></td><td><code>WARNING</code></td><td>Logging verbosity: DEBUG, INFO, WARNING, ERROR</td></tr>
+                        <tr><td><code>GL2GH_MAX_TOKENS</code></td><td><code>4096</code></td><td>Max tokens per AI agent call</td></tr>
+                        <tr><td><code>GL2GH_OUTPUT_DIR</code></td><td><code>.github/workflows</code></td><td>Default output directory</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- ── WEB API ──────────────────────────────────── -->
+                <h2 id="web-api">Web API</h2>
+                <p>gl2gh includes a Flask web server and a Vercel-compatible serverless function for browser-based conversions.</p>
+
+                <h3>Local development</h3>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Terminal</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>cd website
+python app.py
+# &rarr; http://localhost:5000</pre>
+                </div>
+
+                <h3>API endpoint</h3>
+                <table class="docs-table">
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Path</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>POST</code></td>
+                            <td><code>/api/convert</code></td>
+                            <td>Convert GitLab CI YAML to GitHub Actions</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Request</h3>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>JSON</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>{
+  "content": "stages:\n  - build\n\nbuild:\n  stage: build\n  script:\n    - echo hello"
+}</pre>
+                </div>
+
+                <h3>Response</h3>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>JSON</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>{
+  "success": true,
+  "workflow": "name: CI\non: ...",
+  "warnings": [],
+  "notes": [],
+  "errors": []
+}</pre>
+                </div>
+
+                <!-- ── PROJECT STRUCTURE ─────────────────────────── -->
+                <h2 id="project-structure">Project Structure</h2>
+                <div class="code-block">
+                    <div class="code-block-header">
+                        <span>Directory tree</span>
+                        <button class="copy-code-btn" onclick="copyCode(this)">Copy</button>
+                    </div>
+<pre>gitlab-to-gh-actions/
+  src/gl2gh/
+    __init__.py              # Package init, version, public API
+    cli.py                   # Click CLI (5 commands)
+    converter.py             # Rule-based converter
+    parser.py                # GitLab CI YAML parser (ruamel.yaml)
+    models.py                # Dataclasses: GitLabJob, Pipeline, ConversionResult
+    mappings/
+      rules.py               # 30+ variable translations, trigger mapping, pure functions
+    utils/
+      yaml_utils.py          # YAML load/dump/validate helpers
+    agents/
+      migration_agent.py     # GitHub Copilot AI migration (tool-use loop)
+      validator_agent.py     # Static validation + security checks
+      optimizer_agent.py     # Workflow scoring (0-100) + optimizations
+  tests/                     # pytest test suite (126 tests)
+  website/                   # Flask web UI + static pages
+  api/convert.py             # Vercel serverless function
+  examples/                  # Sample .gitlab-ci.yml files</pre>
+                </div>
+
+            </main>
+
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <div class="footer-logo"><span>gl</span>2gh</div>
+                    <div class="footer-text" style="margin-top: 8px;">
+                        GitLab CI/CD to GitHub Actions migration tool.
+                    </div>
+                </div>
+                <ul class="footer-links">
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
+                    <li><a href="docs.html">Documentation</a></li>
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/issues">Issues</a></li>
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/blob/main/LICENSE">MIT License</a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ── Copy code button ──────────────────────────────────
+        window.copyCode = function (btn) {
+            const pre = btn.closest('.code-block').querySelector('pre');
+            if (!pre) return;
+            navigator.clipboard.writeText(pre.textContent).then(function () {
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.color = 'var(--accent-green)';
+                btn.style.borderColor = 'var(--accent-green)';
+                setTimeout(function () {
+                    btn.textContent = orig;
+                    btn.style.color = '';
+                    btn.style.borderColor = '';
+                }, 1500);
+            });
+        };
+
+        // ── Active sidebar link highlighting on scroll ────────
+        var sections = document.querySelectorAll('.docs-content h2[id]');
+        var sidebarLinks = document.querySelectorAll('.docs-sidebar a');
+
+        function highlightSidebar() {
+            var scrollY = window.scrollY + 100;
+            var current = '';
+            sections.forEach(function (section) {
+                if (section.offsetTop <= scrollY) {
+                    current = section.getAttribute('id');
+                }
+            });
+            sidebarLinks.forEach(function (link) {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        window.addEventListener('scroll', highlightSidebar);
+        highlightSidebar();
+    })();
+    </script>
+
+</body>
+</html>

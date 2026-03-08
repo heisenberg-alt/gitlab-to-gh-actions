@@ -20,6 +20,10 @@
       "dest": "/website/converter.html"
     },
     {
+      "src": "/docs(\\.html)?$",
+      "dest": "/website/docs.html"
+    },
+    {
       "src": "^/?$",
       "dest": "/website/index.html"
     }

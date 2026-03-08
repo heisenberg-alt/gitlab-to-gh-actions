@@ -78,3 +78,34 @@ class TestCLI:
             or "Error" in result.output
             or "error" in result.output.lower()
         )
+
+    def test_migrate_pure_rules(self, tmp_path):
+        """--pure-rules should skip validation/optimization and still succeed."""
+        result = self.runner.invoke(
+            main,
+            [
+                "migrate",
+                str(FIXTURES_DIR / "simple.yml"),
+                "--pure-rules",
+                "--output-dir",
+                str(tmp_path),
+            ],
+        )
+        assert result.exit_code == 0
+        # pure-rules should NOT show quality score
+        assert "quality score" not in result.output.lower()
+
+    def test_migrate_default_shows_score(self, tmp_path):
+        """Default (enhanced) conversion should display a quality score."""
+        result = self.runner.invoke(
+            main,
+            [
+                "migrate",
+                str(FIXTURES_DIR / "simple.yml"),
+                "--dry-run",
+                "--output-dir",
+                str(tmp_path),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "quality score" in result.output.lower()

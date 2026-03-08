@@ -58,6 +58,10 @@ def print_result(result: ConversionResult, verbose: bool = False) -> None:
         console.print("\n[bold orange1]Unsupported features:[/bold orange1]")
         for feat in result.unsupported_features:
             console.print(f"  [orange1]- {feat}[/orange1]")
+    if result.validation_issues:
+        console.print("\n[bold magenta]Validation issues:[/bold magenta]")
+        for issue in result.validation_issues:
+            console.print(f"  [magenta]- {issue}[/magenta]")
     if verbose and result.conversion_notes:
         console.print("\n[bold blue]Notes:[/bold blue]")
         for note in result.conversion_notes:
@@ -123,13 +127,19 @@ def main() -> None:
     default=False,
     help="Use GitHub Copilot AI for enhanced conversion.",
 )
+@click.option(
+    "--pure-rules",
+    is_flag=True,
+    default=False,
+    help="Skip validation and optimization checks (pure rule-based only).",
+)
 @click.option("--model", default=None, help="AI model to use (default: gpt-4.1).")
 @click.option("--dry-run", is_flag=True, help="Print output without writing files.")
 @click.option("-v", "--verbose", is_flag=True, help="Show detailed conversion info.")
 @click.option(
     "--format", "output_format", type=click.Choice(["yaml", "json"]), default="yaml"
 )
-def migrate(input_file, output_dir, name, ai, model, dry_run, verbose, output_format):
+def migrate(input_file, output_dir, name, ai, pure_rules, model, dry_run, verbose, output_format):
     """Migrate a GitLab CI pipeline to GitHub Actions."""
     print_banner()
     console.print(f"\n[dim]Reading:[/dim] [cyan]{input_file}[/cyan]")
@@ -167,9 +177,18 @@ def migrate(input_file, output_dir, name, ai, model, dry_run, verbose, output_fo
             progress.remove_task(task)
     else:
         converter = GitLabToGitHubConverter(workflow_name=name, source_file=input_file)
-        result = converter.convert(pipeline)
+        if pure_rules:
+            result = converter.convert(pipeline)
+        else:
+            result = converter.convert_enhanced(pipeline)
 
     print_result(result, verbose=verbose)
+
+    # Show optimization score when available
+    if result.optimization_score is not None:
+        score = result.optimization_score
+        color = "green" if score >= 70 else "yellow" if score >= 50 else "red"
+        console.print(f"\n[bold]Workflow quality score:[/bold] [{color}]{score}/100[/{color}]")
 
     if not result.success:
         sys.exit(1)
