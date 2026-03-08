@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -9,6 +10,17 @@ from typing import Any, Optional
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+def _run_async(coro):
+    """Run a coroutine, handling the case where an event loop is already running."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 @dataclass
@@ -61,8 +73,6 @@ class OptimizerAgent:
         """Optimize using GitHub Copilot AI for deeper analysis."""
         report = self.optimize(content)
         try:
-            import asyncio
-
             from copilot import CopilotClient
 
             async def _ai_optimize():
@@ -100,7 +110,7 @@ class OptimizerAgent:
                 await client.stop()
                 return "".join(full_text_parts)
 
-            full_text = asyncio.run(_ai_optimize())
+            full_text = _run_async(_ai_optimize())
             for line in full_text.split("\n"):
                 line = line.strip()
                 if line.startswith("- ") and ":" in line:

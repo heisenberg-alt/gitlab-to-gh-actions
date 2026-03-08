@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gl2gh - Converter</title>
+    <meta name="description" content="Paste your .gitlab-ci.yml and instantly get the equivalent GitHub Actions workflow.">
+    <style>
+        /* ============================================================
+           Reset and Base (matches index.html)
+           ============================================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #1c2128;
+            --bg-card: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #bc8cff;
+            --accent-orange: #d29922;
+            --accent-pink: #f778ba;
+            --accent-red: #f85149;
+            --gradient-start: #1a1f36;
+            --gradient-end: #0d1117;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        a:hover { text-decoration: underline; }
+
+        /* ============================================================
+           Layout
+           ============================================================ */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ============================================================
+           Navigation (identical to index.html)
+           ============================================================ */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .nav-logo span { color: var(--accent-blue); }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .nav-links a.active { color: var(--accent-blue); }
+
+        /* ============================================================
+           Buttons
+           ============================================================ */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+            font-family: var(--font-sans);
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: #0d1117;
+        }
+
+        .btn-primary:hover {
+            background: #79c0ff;
+            text-decoration: none;
+        }
+
+        .btn-primary:active { transform: scale(0.98); }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card);
+            border-color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        .btn-small {
+            padding: 5px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn:disabled:hover { transform: none; }
+
+        /* ============================================================
+           Hero / Page Header
+           ============================================================ */
+        .page-header {
+            padding: 120px 0 40px;
+            text-align: center;
+            background: linear-gradient(180deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page-header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 400px;
+            background: radial-gradient(ellipse at center, rgba(88, 166, 255, 0.07) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .page-header h1 {
+            font-size: 40px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 12px;
+        }
+
+        .page-header h1 .highlight {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-header p {
+            font-size: 17px;
+            color: var(--text-secondary);
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        /* ============================================================
+           Converter Section
+           ============================================================ */
+        .converter-section {
+            flex: 1;
+            padding: 32px 0 64px;
+        }
+
+        /* Toolbar */
+        .converter-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Panes */
+        .converter-panes {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 0;
+            align-items: stretch;
+            min-height: 520px;
+        }
+
+        .converter-pane {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .pane-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .pane-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pane-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .pane-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .badge-input {
+            background: rgba(88, 166, 255, 0.12);
+            color: var(--accent-blue);
+        }
+
+        .badge-output {
+            background: rgba(63, 185, 80, 0.12);
+            color: var(--accent-green);
+        }
+
+        /* macOS-style window dots */
+        .window-dots {
+            display: flex;
+            gap: 6px;
+            margin-right: 4px;
+        }
+
+        .wdot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+        }
+
+        .wdot.red    { background: #ff5f57; }
+        .wdot.yellow { background: #febc2e; }
+        .wdot.green  { background: #28c840; }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.75;
+            color: var(--text-primary);
+            padding: 20px;
+            tab-size: 2;
+            caret-color: var(--accent-blue);
+        }
+
+        textarea::placeholder { color: var(--text-muted); }
+
+        textarea:focus { background: rgba(88, 166, 255, 0.02); }
+
+        textarea[readonly] {
+            cursor: default;
+            color: var(--text-secondary);
+        }
+
+        textarea[readonly]:focus { background: transparent; }
+
+        /* Divider arrow */
+        .converter-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            flex-shrink: 0;
+        }
+
+        .arrow-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .arrow-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-blue);
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        /* Spinning loader inside arrow icon */
+        .arrow-icon.loading {
+            animation: spin 0.8s linear infinite;
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ============================================================
+           Messages (errors / warnings / notes)
+           ============================================================ */
+        .messages-area {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 18px;
+            border-radius: 10px;
+            font-size: 14px;
+            border: 1px solid transparent;
+            animation: fadeIn 0.25s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .message-content { flex: 1; }
+        .message-content strong { display: block; margin-bottom: 4px; }
+        .message-list {
+            margin: 6px 0 0 0;
+            padding-left: 18px;
+        }
+        .message-list li { margin-bottom: 3px; }
+
+        .message-error {
+            background: rgba(248, 81, 73, 0.08);
+            border-color: rgba(248, 81, 73, 0.3);
+            color: #ffa198;
+        }
+
+        .message-warning {
+            background: rgba(210, 153, 34, 0.08);
+            border-color: rgba(210, 153, 34, 0.3);
+            color: #e3b341;
+        }
+
+        .message-info {
+            background: rgba(88, 166, 255, 0.08);
+            border-color: rgba(88, 166, 255, 0.25);
+            color: #79c0ff;
+        }
+
+        .message-success {
+            background: rgba(63, 185, 80, 0.08);
+            border-color: rgba(63, 185, 80, 0.25);
+            color: #56d364;
+        }
+
+        /* ============================================================
+           Copy feedback
+           ============================================================ */
+        .copy-feedback {
+            font-size: 12px;
+            color: var(--accent-green);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .copy-feedback.visible { opacity: 1; }
+
+        /* ============================================================
+           Footer (matches index.html)
+           ============================================================ */
+        footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 40px 0;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+
+        .footer-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .footer-logo span { color: var(--accent-blue); }
+
+        .footer-text {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .footer-links a:hover { color: var(--text-primary); }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 900px) {
+            .converter-panes {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+            }
+
+            .converter-divider {
+                width: 100%;
+                height: 44px;
+                flex-direction: row;
+            }
+
+            .arrow-icon {
+                transform: rotate(90deg);
+            }
+
+            .page-header h1 { font-size: 28px; }
+
+            .nav-links { display: none; }
+
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="container">
+            <a href="/" class="nav-logo" style="text-decoration:none;"><span>gl</span>2gh</a>
+            <ul class="nav-links">
+                <li><a href="/">Home</a></li>
+                <li><a href="/#features">Features</a></li>
+                <li><a href="/#how-it-works">How It Works</a></li>
+                <li><a href="/#quickstart">Quick Start</a></li>
+                <li><a href="/converter" class="active">Converter</a></li>
+                <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container">
+            <h1><span class="highlight">Converter</span></h1>
+            <p>Paste your <code style="font-family:var(--font-mono);font-size:15px;color:var(--accent-blue);">.gitlab-ci.yml</code> and instantly get the equivalent GitHub Actions workflow.</p>
+        </div>
+    </div>
+
+    <!-- Converter -->
+    <section class="converter-section">
+        <div class="container">
+
+            <!-- Toolbar -->
+            <div class="converter-toolbar">
+                <div class="toolbar-left">
+                    <button class="btn btn-secondary" id="load-example-btn" title="Load a sample GitLab CI pipeline">
+                        &#x1F4CB; Load Example
+                    </button>
+                    <button class="btn btn-secondary" id="clear-btn" title="Clear both panes">
+                        &#x2715; Clear
+                    </button>
+                </div>
+                <div class="toolbar-right">
+                    <button class="btn btn-primary" id="convert-btn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline></svg>
+                        Convert
+                    </button>
+                </div>
+            </div>
+
+            <!-- Panes -->
+            <div class="converter-panes">
+
+                <!-- Left pane: Input -->
+                <div class="converter-pane">
+                    <div class="pane-header">
+                        <div class="pane-header-left">
+                            <div class="window-dots">
+                                <div class="wdot red"></div>
+                                <div class="wdot yellow"></div>
+                                <div class="wdot green"></div>
+                            </div>
+                            <span class="pane-title">.gitlab-ci.yml</span>
+                        </div>
+                        <span class="pane-badge badge-input">Input</span>
+                    </div>
+                    <textarea
+                        id="input-editor"
+                        spellcheck="false"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        placeholder="# Paste your .gitlab-ci.yml here&#10;&#10;stages:&#10;  - build&#10;  - test&#10;&#10;build:&#10;  stage: build&#10;  script:&#10;    - echo 'building...'"
+                    ></textarea>
+                </div>
+
+                <!-- Divider + arrow -->
+                <div class="converter-divider">
+                    <div class="arrow-btn">
+                        <div class="arrow-icon" id="arrow-icon">&#x2192;</div>
+                    </div>
+                </div>
+
+                <!-- Right pane: Output -->
+                <div class="converter-pane">
+                    <div class="pane-header">
+                        <div class="pane-header-left">
+                            <div class="window-dots">
+                                <div class="wdot red"></div>
+                                <div class="wdot yellow"></div>
+                                <div class="wdot green"></div>
+                            </div>
+                            <span class="pane-title">github-actions.yml</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span class="copy-feedback" id="copy-feedback">Copied!</span>
+                            <button class="btn btn-secondary btn-small" id="copy-btn" title="Copy to clipboard">
+                                &#x2398; Copy
+                            </button>
+                            <span class="pane-badge badge-output">Output</span>
+                        </div>
+                    </div>
+                    <textarea
+                        id="output-editor"
+                        readonly
+                        spellcheck="false"
+                        placeholder="# GitHub Actions workflow will appear here after conversion..."
+                    ></textarea>
+                </div>
+
+            </div>
+
+            <!-- Messages -->
+            <div class="messages-area" id="messages-area"></div>
+
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <div class="footer-logo"><span>gl</span>2gh</div>
+                    <div class="footer-text" style="margin-top: 8px;">
+                        GitLab CI/CD to GitHub Actions migration tool.
+                    </div>
+                </div>
+                <ul class="footer-links">
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/blob/main/docs/MIGRATION_GUIDE.md">Documentation</a></li>
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/issues">Issues</a></li>
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/blob/main/LICENSE">MIT License</a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ── DOM refs ──────────────────────────────────────────────
+        const inputEditor   = document.getElementById('input-editor');
+        const outputEditor  = document.getElementById('output-editor');
+        const convertBtn    = document.getElementById('convert-btn');
+        const clearBtn      = document.getElementById('clear-btn');
+        const loadExampleBtn = document.getElementById('load-example-btn');
+        const copyBtn       = document.getElementById('copy-btn');
+        const copyFeedback  = document.getElementById('copy-feedback');
+        const arrowIcon     = document.getElementById('arrow-icon');
+        const messagesArea  = document.getElementById('messages-area');
+
+        // ── Example GitLab CI content ─────────────────────────────
+        const EXAMPLE_GITLAB_CI = `stages:
+  - install
+  - test
+  - build
+  - deploy
+
+variables:
+  NODE_VERSION: "20"
+
+install:
+  stage: install
+  image: node:20
+  script:
+    - npm ci
+  cache:
+    key: \${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+
+test:
+  stage: test
+  image: node:20
+  script:
+    - npm test
+  artifacts:
+    reports:
+      junit: test-results.xml
+
+build:
+  stage: build
+  image: node:20
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+deploy:
+  stage: deploy
+  image: node:20
+  script:
+    - npm run deploy
+  environment:
+    name: production
+  only:
+    - main
+`;
+
+        // ── Helpers ───────────────────────────────────────────────
+        function setLoading(on) {
+            convertBtn.disabled = on;
+            if (on) {
+                arrowIcon.innerHTML = '&#x21BB;';
+                arrowIcon.classList.add('loading');
+                convertBtn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                        style="animation:spin 0.8s linear infinite">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                    </svg>
+                    Converting…`;
+            } else {
+                arrowIcon.innerHTML = '&#x2192;';
+                arrowIcon.classList.remove('loading');
+                convertBtn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline>
+                    </svg>
+                    Convert`;
+            }
+        }
+
+        function clearMessages() {
+            messagesArea.innerHTML = '';
+        }
+
+        function addMessage(type, title, items) {
+            // type: 'error' | 'warning' | 'info' | 'success'
+            const icons = { error: '✖', warning: '⚠', info: 'ℹ', success: '✔' };
+            const div = document.createElement('div');
+            div.className = `message message-${type}`;
+
+            let itemsHtml = '';
+            if (items && items.length > 0) {
+                const liItems = items.map(i => `<li>${escapeHtml(i)}</li>`).join('');
+                itemsHtml = `<ul class="message-list">${liItems}</ul>`;
+            }
+
+            div.innerHTML = `
+                <span class="message-icon">${icons[type] || 'ℹ'}</span>
+                <div class="message-content">
+                    <strong>${escapeHtml(title)}</strong>
+                    ${itemsHtml}
+                </div>`;
+            messagesArea.appendChild(div);
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // ── Convert ───────────────────────────────────────────────
+        async function runConvert() {
+            const content = inputEditor.value.trim();
+            if (!content) {
+                clearMessages();
+                addMessage('warning', 'Nothing to convert', ['Please paste your .gitlab-ci.yml content into the left pane.']);
+                return;
+            }
+
+            clearMessages();
+            setLoading(true);
+            outputEditor.value = '';
+
+            try {
+                const response = await fetch('/api/convert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content }),
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    outputEditor.value = data.workflow || '';
+                    addMessage('success', 'Conversion successful!', []);
+
+                    if (data.warnings && data.warnings.length > 0) {
+                        addMessage('warning', `${data.warnings.length} warning(s)`, data.warnings);
+                    }
+                    if (data.notes && data.notes.length > 0) {
+                        addMessage('info', 'Conversion notes', data.notes);
+                    }
+                } else {
+                    const errors = data.errors || ['An unknown error occurred.'];
+                    addMessage('error', 'Conversion failed', errors);
+                    if (data.warnings && data.warnings.length > 0) {
+                        addMessage('warning', 'Warnings', data.warnings);
+                    }
+                }
+            } catch (err) {
+                addMessage('error', 'Network error', [
+                    'Could not reach the conversion server. Make sure the server is running.',
+                    String(err),
+                ]);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // ── Event listeners ───────────────────────────────────────
+        convertBtn.addEventListener('click', runConvert);
+
+        // Convert on Ctrl+Enter / Cmd+Enter from either textarea
+        [inputEditor, outputEditor].forEach(el => {
+            el.addEventListener('keydown', function (e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    runConvert();
+                }
+            });
+        });
+
+        loadExampleBtn.addEventListener('click', function () {
+            inputEditor.value = EXAMPLE_GITLAB_CI;
+            outputEditor.value = '';
+            clearMessages();
+            addMessage('info', 'Example loaded', ['Click Convert (or press ⌘↵ / Ctrl↵) to translate it.']);
+            inputEditor.focus();
+        });
+
+        clearBtn.addEventListener('click', function () {
+            inputEditor.value = '';
+            outputEditor.value = '';
+            clearMessages();
+            inputEditor.focus();
+        });
+
+        copyBtn.addEventListener('click', function () {
+            const text = outputEditor.value;
+            if (!text) return;
+
+            navigator.clipboard.writeText(text).then(function () {
+                copyFeedback.classList.add('visible');
+                setTimeout(function () {
+                    copyFeedback.classList.remove('visible');
+                }, 2000);
+            }).catch(function () {
+                // Fallback for older browsers
+                outputEditor.select();
+                document.execCommand('copy');
+                copyFeedback.classList.add('visible');
+                setTimeout(function () {
+                    copyFeedback.classList.remove('visible');
+                }, 2000);
+            });
+        });
+
+        // Tab key inserts spaces in the input textarea
+        inputEditor.addEventListener('keydown', function (e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end   = this.selectionEnd;
+                this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 2;
+            }
+        });
+
+        // Add the spin keyframe via JS so the inline SVG spinner works
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(styleSheet);
+    })();
+    </script>
+
+</body>
+</html>

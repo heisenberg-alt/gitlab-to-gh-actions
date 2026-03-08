@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -9,6 +10,17 @@ from typing import Any, Optional
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+def _run_async(coro):
+    """Run a coroutine, handling the case where an event loop is already running."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 @dataclass
@@ -25,10 +37,20 @@ class ValidatorAgent:
     # PyYAML (YAML 1.1) parses bare 'on' as boolean True
     _ON_KEYS = {"on", True}
     REQUIRED_JOB_KEYS = {"runs-on", "steps"}
+    # Reusable workflow caller jobs only need 'uses', not 'runs-on'/'steps'
+    CALLER_JOB_KEY = "uses"
     SECURITY_PATTERNS = [
         (
             "${{ github.event.pull_request.head.ref }}",
             "Potential script injection via PR head ref",
+        ),
+        (
+            "${{ github.event.pull_request.title }}",
+            "Potential script injection via PR title",
+        ),
+        (
+            "${{ github.event.pull_request.body }}",
+            "Potential script injection via PR body",
         ),
         (
             "${{ github.event.issue.title }}",
@@ -38,6 +60,18 @@ class ValidatorAgent:
         (
             "${{ github.event.comment.body }}",
             "Potential script injection via comment body",
+        ),
+        (
+            "${{ github.event.discussion.body }}",
+            "Potential script injection via discussion body",
+        ),
+        (
+            "${{ github.event.pages.*.page_name }}",
+            "Potential script injection via page name",
+        ),
+        (
+            "${{ github.event.head_commit.message }}",
+            "Potential script injection via commit message",
         ),
     ]
 
@@ -101,6 +135,10 @@ class ValidatorAgent:
             issues.append(ValidationIssue("error", f"Job '{name}' must be a mapping"))
             return issues
 
+        # Reusable workflow caller jobs only need 'uses'
+        if self.CALLER_JOB_KEY in job_def:
+            return issues
+
         for key in self.REQUIRED_JOB_KEYS:
             if key not in job_def:
                 issues.append(
@@ -153,8 +191,6 @@ class ValidatorAgent:
         issues = self.validate_static(content)
 
         try:
-            import asyncio
-
             from copilot import CopilotClient
 
             async def _ai_validate():
@@ -193,7 +229,7 @@ class ValidatorAgent:
                 await client.stop()
                 return "".join(collected)
 
-            ai_text = asyncio.run(_ai_validate())
+            ai_text = _run_async(_ai_validate())
             for line in ai_text.split("\n"):
                 line = line.strip()
                 if line.startswith("ERROR:"):

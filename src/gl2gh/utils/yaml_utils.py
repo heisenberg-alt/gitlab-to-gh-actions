@@ -45,7 +45,7 @@ def _dict_to_commented(obj: Any) -> Any:
     return obj
 
 
-def dump_yaml(data: dict[str, Any], sort_keys: bool = False) -> str:
+def dump_yaml(data: dict[str, Any]) -> str:
     ry = YAML()
     ry.default_flow_style = False
     ry.indent(mapping=2, sequence=4, offset=2)

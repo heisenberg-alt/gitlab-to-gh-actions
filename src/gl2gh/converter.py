@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from gl2gh.mappings.rules import (
     convert_rules_to_if,
+    convert_trigger_to_reusable_workflow,
     image_to_runner,
     normalize_service,
     parse_expire_in_days,
@@ -49,11 +50,14 @@ class GitLabToGitHubConverter:
             return result
 
         try:
-            workflow = self._build_workflow(pipeline, result)
+            workflow, child_workflows = self._build_workflow(pipeline, result)
             yaml_content = dump_yaml(workflow)
             yaml_with_header = add_yaml_header(yaml_content, self.source_file)
             filename = self._workflow_filename()
             result.output_workflows[filename] = yaml_with_header
+            # Append child reusable workflows after the main workflow
+            for child_key, child_content in child_workflows.items():
+                result.output_workflows[child_key] = child_content
         except Exception as exc:
             logger.exception("Conversion failed")
             result.errors.append(f"Conversion error: {exc}")
@@ -68,7 +72,13 @@ class GitLabToGitHubConverter:
         self,
         pipeline: GitLabPipeline,
         result: ConversionResult,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], dict[str, str]]:
+        """Build the main workflow dict and any child reusable workflow files.
+
+        Returns:
+            (workflow_dict, child_workflows) where child_workflows maps
+            filename -> YAML content string.
+        """
         workflow: dict[str, Any] = {}
         workflow["name"] = self.workflow_name
 
@@ -85,21 +95,54 @@ class GitLabToGitHubConverter:
         stage_needs = stages_to_needs_graph(non_template_jobs, pipeline.stages)
 
         jobs_dict: dict[str, Any] = {}
+        child_workflows: dict[str, str] = {}
+
         for job_name, job in non_template_jobs.items():
             if job.trigger:
-                result.warnings.append(
-                    f"Job '{job_name}' uses 'trigger:' — "
-                    "converted to workflow_dispatch. "
-                    "Review manually."
+                caller_job, child_wf, trigger_warnings = (
+                    convert_trigger_to_reusable_workflow(job.trigger, job_name)
                 )
-                result.unsupported_features.append("trigger:")
+                result.warnings.extend(trigger_warnings)
+
+                # Build the caller job entry
+                sanitized = self._sanitize_job_name(job_name)
+                gha_caller: dict[str, Any] = dict(caller_job)
+
+                # Preserve stage-based needs for the caller
+                needs = job.needs if job.needs else stage_needs.get(job_name, [])
+                if needs:
+                    gha_caller["needs"] = [
+                        self._sanitize_job_name(n) for n in needs if n
+                    ]
+
+                jobs_dict[sanitized] = gha_caller
+
+                # Generate the child reusable workflow file
+                if child_wf is not None:
+                    child_filename = caller_job["uses"].lstrip("./")
+                    # Use just the filename portion as the output key
+                    child_key = child_filename.rsplit("/", maxsplit=1)[-1]
+                    # Deduplicate if another trigger produced the same filename
+                    if child_key in child_workflows:
+                        child_key = f"{self._sanitize_job_name(job_name)}-{child_key}"
+                    child_yaml = dump_yaml(child_wf)
+                    child_yaml_with_header = add_yaml_header(
+                        child_yaml, self.source_file
+                    )
+                    child_workflows[child_key] = child_yaml_with_header
+                    result.conversion_notes.append(
+                        f"Child pipeline for '{job_name}' generated as "
+                        f"'{child_filename}'. Populate its jobs from the "
+                        "original included file."
+                    )
                 continue
 
             gha_job = self._convert_job(job_name, job, stage_needs, pipeline, result)
             jobs_dict[self._sanitize_job_name(job_name)] = gha_job
 
         workflow["jobs"] = jobs_dict
-        return workflow
+
+        return workflow, child_workflows
 
     def _build_triggers(
         self,
@@ -296,7 +339,10 @@ class GitLabToGitHubConverter:
         for svc in services:
             svc = normalize_service(svc)
             image = svc.get("image", "")
-            name = image.split("/")[-1].split(":")[0].replace("-", "_")
+            name = svc.get("alias") or image.split("/")[-1].split(":")[0].replace("-", "_")
+            # Avoid silently overwriting duplicate service names
+            if name in gha_services:
+                name = f"{name}_{len(gha_services)}"
             svc_def: dict[str, Any] = {"image": image}
             if "ports" in svc:
                 svc_def["ports"] = svc["ports"]

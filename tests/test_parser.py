@@ -91,3 +91,67 @@ class TestGitLabCIParser:
     def test_parse_minimal(self):
         pipeline = self.parser.parse_string("job1:\n  script: echo hello")
         assert "job1" in pipeline.jobs
+
+    def test_extends_merges_rules(self):
+        content = """\
+.base:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+job1:
+  extends: .base
+  script:
+    - echo hi
+"""
+        pipeline = self.parser.parse_string(content)
+        job = pipeline.jobs["job1"]
+        assert len(job.rules) == 1
+        assert job.rules[0]["if"] == '$CI_COMMIT_BRANCH == "main"'
+
+    def test_extends_merges_timeout(self):
+        content = """\
+.base:
+  timeout: 2h
+
+job1:
+  extends: .base
+  script:
+    - echo hi
+"""
+        pipeline = self.parser.parse_string(content)
+        assert pipeline.jobs["job1"].timeout == "2h"
+
+    def test_extends_merges_retry(self):
+        content = """\
+.base:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+
+job1:
+  extends: .base
+  script:
+    - echo hi
+"""
+        pipeline = self.parser.parse_string(content)
+        assert pipeline.jobs["job1"].retry is not None
+        assert pipeline.jobs["job1"].retry.max == 2
+
+    def test_extends_does_not_overwrite_job_rules(self):
+        content = """\
+.base:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+job1:
+  extends: .base
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  script:
+    - echo hi
+"""
+        pipeline = self.parser.parse_string(content)
+        job = pipeline.jobs["job1"]
+        assert len(job.rules) == 1
+        assert "$CI_COMMIT_TAG" in job.rules[0]["if"]

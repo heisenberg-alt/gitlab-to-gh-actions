@@ -90,6 +90,34 @@ jobs:
         issues = self.validator.validate_static(content)
         assert any(i.severity == "info" and "non-standard" in i.message for i in issues)
 
+    def test_reusable_workflow_caller_no_false_positive(self):
+        """Jobs with only 'uses:' (reusable workflow callers) should not flag missing runs-on/steps."""
+        content = """\
+name: CI
+on: push
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+"""
+        issues = self.validator.validate_static(content)
+        errors = [i for i in issues if i.severity == "error"]
+        assert len(errors) == 0
+
+    def test_pr_title_injection_detected(self):
+        content = """\
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ${{ github.event.pull_request.title }}
+"""
+        issues = self.validator.validate_static(content)
+        assert any(
+            i.severity == "warning" and "injection" in i.message.lower() for i in issues
+        )
+
 
 class TestOptimizerAgent:
     def setup_method(self):

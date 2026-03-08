@@ -67,7 +67,7 @@ def print_result(result: ConversionResult, verbose: bool = False) -> None:
 def _check_gh_cli() -> bool:
     """Check if gh CLI is installed."""
     try:
-        subprocess.run(["gh", "--version"], capture_output=True, check=True)
+        subprocess.run(["gh", "--version"], capture_output=True, check=True, timeout=10)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
@@ -75,15 +75,15 @@ def _check_gh_cli() -> bool:
 
 def _gh_create_repo(name: str, private: bool = False) -> bool:
     """Create a GitHub repo using gh CLI."""
-    cmd = ["gh", "repo", "create", name, "--confirm"]
+    cmd = ["gh", "repo", "create", name, "--yes"]
     if private:
         cmd.append("--private")
     else:
         cmd.append("--public")
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=30)
         return True
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         console.print(f"[red]gh repo create failed: {e.stderr}[/red]")
         return False
 
@@ -96,6 +96,7 @@ def _gh_workflow_list() -> list[str]:
             capture_output=True,
             text=True,
             check=True,
+            timeout=15,
         )
         workflows = json.loads(result.stdout)
         return [w["name"] for w in workflows]
@@ -341,7 +342,7 @@ def gh_status():
         # Check for copilot extension
         try:
             r = subprocess.run(
-                ["gh", "extension", "list"], capture_output=True, text=True
+                ["gh", "extension", "list"], capture_output=True, text=True, timeout=10
             )
             if "copilot" in r.stdout.lower():
                 console.print("[green]gh copilot:[/green] installed")

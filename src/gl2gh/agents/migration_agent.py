@@ -8,6 +8,18 @@ import logging
 import os
 from typing import Optional
 
+
+def _run_async(coro):
+    """Run a coroutine, handling the case where an event loop is already running."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    # Already inside an event loop — create a new thread to avoid RuntimeError
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
 from pydantic import BaseModel, Field
 
 from gl2gh.converter import GitLabToGitHubConverter
@@ -117,7 +129,7 @@ class MigrationAgent:
             return base_result
 
         try:
-            enhanced: ConversionResult = asyncio.run(
+            enhanced: ConversionResult = _run_async(
                 self._run_ai_migration(
                     pipeline, base_result, source_file, workflow_name
                 )
@@ -139,7 +151,7 @@ class MigrationAgent:
     ) -> bool:
         """Full repository migration using streaming GitHub Copilot."""
         try:
-            success: bool = asyncio.run(
+            success: bool = _run_async(
                 self._migrate_repository_async(source_repo, target_repo, branch)
             )
             return success

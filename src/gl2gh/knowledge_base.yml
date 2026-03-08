@@ -1443,7 +1443,763 @@ patterns:
           # Configure in: Settings > Code security and analysis
 
 # ============================================================================
-# 8. UNSUPPORTED / WORKAROUND-NEEDED FEATURES
+# 8. NESTED / COMPOSED CI FILES
+# ============================================================================
+# GitLab supports deeply nested pipeline composition through `include:` and
+# `trigger:`. This section provides exhaustive translation patterns.
+#
+# Hierarchy of GitLab composition mechanisms:
+#   include:local       -> Merge YAML from same repo
+#   include:remote      -> Merge YAML from URL
+#   include:project     -> Merge YAML from another repo
+#   include:template    -> Merge GitLab-provided template
+#   include:component   -> CI/CD Component catalog entry
+#   trigger:include     -> Child pipeline (same repo, separate pipeline context)
+#   trigger:project     -> Multi-project pipeline (different repo)
+#   needs:pipeline      -> Cross-pipeline artifact dependency
+#   needs:project       -> Cross-project artifact dependency
+#
+# GitHub equivalents:
+#   Reusable workflows  -> workflow_call (closest to trigger:include)
+#   Composite actions   -> action.yml (closest to include:local for step reuse)
+#   workflow_dispatch    -> API-triggered workflow (closest to trigger:project)
+#   repository_dispatch  -> Event-triggered cross-repo workflow
+nested_ci:
+
+  # ---------------------------------------------------------------------------
+  # 8.1  include:local — Same-repo YAML merging
+  # ---------------------------------------------------------------------------
+  include_local:
+    description: "Include YAML files from the same repository"
+    gitlab: |
+      # Root .gitlab-ci.yml
+      include:
+        - local: '/ci/build.yml'
+        - local: '/ci/test.yml'
+        - local: '/ci/deploy.yml'
+
+      stages: [build, test, deploy]
+      variables:
+        APP_NAME: my-app
+
+      # ci/build.yml
+      build:
+        stage: build
+        script: make build
+
+      # ci/test.yml
+      unit_test:
+        stage: test
+        script: make test
+
+      integration_test:
+        stage: test
+        script: make integration-test
+    github: |
+      # Option A: Single workflow with all jobs inlined
+      # (GitHub has no YAML merging — must consolidate)
+      #
+      # .github/workflows/ci.yml
+      name: CI
+      on: [push, pull_request]
+      env:
+        APP_NAME: my-app
+      jobs:
+        build:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: make build
+        unit_test:
+          runs-on: ubuntu-latest
+          needs: [build]
+          steps:
+            - uses: actions/checkout@v4
+            - run: make test
+        integration_test:
+          runs-on: ubuntu-latest
+          needs: [build]
+          steps:
+            - uses: actions/checkout@v4
+            - run: make integration-test
+
+      # Option B: Caller + reusable workflows
+      #
+      # .github/workflows/ci.yml (caller)
+      name: CI
+      on: [push, pull_request]
+      jobs:
+        build:
+          uses: ./.github/workflows/build.yml
+        test:
+          needs: [build]
+          uses: ./.github/workflows/test.yml
+        deploy:
+          needs: [test]
+          uses: ./.github/workflows/deploy.yml
+
+      # .github/workflows/build.yml (reusable)
+      name: Build
+      on:
+        workflow_call: {}
+      jobs:
+        build:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: make build
+    notes: |
+      GitLab include:local merges YAML keys at parse time — all jobs land
+      in one pipeline. GitHub has two approaches:
+        A) Inline everything into one workflow file (simplest).
+        B) Split into reusable workflows called via workflow_call.
+      Option A is recommended for < 10 jobs. Option B for larger pipelines.
+
+  # ---------------------------------------------------------------------------
+  # 8.2  include:remote — External URL includes
+  # ---------------------------------------------------------------------------
+  include_remote:
+    description: "Include YAML from an external URL"
+    gitlab: |
+      include:
+        - remote: 'https://gitlab.com/shared-ci/templates/-/raw/main/go.yml'
+        - remote: 'https://example.com/ci/security-scan.yml'
+    github: |
+      # No URL-based YAML inclusion. Use reusable workflows from public repos.
+      jobs:
+        go-build:
+          uses: shared-ci/templates/.github/workflows/go.yml@main
+        security-scan:
+          uses: example-org/security/.github/workflows/scan.yml@main
+    notes: |
+      GitHub cannot fetch and merge arbitrary YAML from URLs.
+      The remote YAML must be converted to a reusable workflow hosted
+      in a GitHub repository accessible to the calling workflow.
+
+  # ---------------------------------------------------------------------------
+  # 8.3  include:project — Cross-project includes
+  # ---------------------------------------------------------------------------
+  include_project:
+    description: "Include YAML from another GitLab project"
+    gitlab: |
+      include:
+        - project: 'platform-team/ci-templates'
+          ref: v2.1.0
+          file:
+            - '/templates/docker-build.yml'
+            - '/templates/deploy.yml'
+
+        - project: 'security-team/scanners'
+          ref: main
+          file: '/sast.yml'
+    github: |
+      jobs:
+        docker-build:
+          uses: platform-team/ci-templates/.github/workflows/docker-build.yml@v2.1.0
+        deploy:
+          uses: platform-team/ci-templates/.github/workflows/deploy.yml@v2.1.0
+        sast:
+          uses: security-team/scanners/.github/workflows/sast.yml@main
+    notes: |
+      include:project:file maps to uses: owner/repo/.github/workflows/file.yml@ref.
+      Key differences:
+        - GitLab merges YAML in-place; GitHub reusable workflows run as a separate job.
+        - GitLab ref can be branch/tag/SHA; GitHub @ref works the same way.
+        - Multiple files from same project: GitLab = one include; GitHub = one job per workflow.
+        - Reusable workflows must be in .github/workflows/ and use on: workflow_call.
+
+  # ---------------------------------------------------------------------------
+  # 8.4  include:template — GitLab-provided templates
+  # ---------------------------------------------------------------------------
+  include_template:
+    description: "Include GitLab-maintained CI/CD templates"
+    gitlab: |
+      include:
+        - template: Auto-DevOps.gitlab-ci.yml
+        - template: Security/SAST.gitlab-ci.yml
+        - template: Security/Secret-Detection.gitlab-ci.yml
+        - template: Security/Dependency-Scanning.gitlab-ci.yml
+        - template: Code-Quality.gitlab-ci.yml
+    github: |
+      # No built-in templates. Use equivalent marketplace actions:
+      jobs:
+        sast:
+          runs-on: ubuntu-latest
+          permissions:
+            security-events: write
+          steps:
+            - uses: actions/checkout@v4
+            - uses: github/codeql-action/init@v3
+              with:
+                languages: python
+            - uses: github/codeql-action/analyze@v3
+
+        secret-detection:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: trufflesecurity/trufflehog@main
+              with:
+                extra_args: --only-verified
+
+        dependency-scanning:
+          runs-on: ubuntu-latest
+          permissions:
+            contents: read
+          steps:
+            - uses: actions/checkout@v4
+            - uses: actions/dependency-review-action@v4
+    notes: |
+      GitLab template equivalents:
+        Auto-DevOps.gitlab-ci.yml    -> No single equivalent; build workflow manually
+        Security/SAST                -> github/codeql-action
+        Security/Secret-Detection    -> trufflesecurity/trufflehog or gitleaks
+        Security/Dependency-Scanning -> actions/dependency-review-action
+        Code-Quality.gitlab-ci.yml   -> super-linter/super-linter or reviewdog
+        DAST.gitlab-ci.yml           -> zaproxy/action-full-scan
+        Container-Scanning           -> aquasecurity/trivy-action
+
+  # ---------------------------------------------------------------------------
+  # 8.5  include:component — CI/CD Catalog components
+  # ---------------------------------------------------------------------------
+  include_component:
+    description: "Include from the GitLab CI/CD Component Catalog"
+    gitlab: |
+      include:
+        - component: gitlab.com/components/opentofu/full-pipeline@0.16.0
+          inputs:
+            version: 1.6.2
+            root_dir: infra/
+        - component: gitlab.com/components/code-quality/code-quality@1.0.0
+    github: |
+      jobs:
+        opentofu:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: opentofu/setup-opentofu@v1
+              with:
+                tofu_version: 1.6.2
+            - run: |
+                cd infra/
+                tofu init
+                tofu plan
+                tofu apply -auto-approve
+        code-quality:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - uses: super-linter/super-linter@v6
+    notes: |
+      GitLab CI/CD Components (catalog entries) map to:
+        - GitHub Actions from the marketplace (for tool-specific tasks)
+        - Reusable workflows (for workflow-level composition)
+      Component inputs: -> action inputs (with:) or reusable workflow inputs.
+      No 1:1 catalog concept in GitHub; the Actions marketplace serves a similar role.
+
+  # ---------------------------------------------------------------------------
+  # 8.6  include:rules — Conditional includes
+  # ---------------------------------------------------------------------------
+  include_rules:
+    description: "Conditionally include YAML files based on rules"
+    gitlab: |
+      include:
+        - local: '/ci/frontend.yml'
+          rules:
+            - if: '$CI_COMMIT_BRANCH == "main"'
+            - changes:
+                - 'frontend/**/*'
+        - local: '/ci/backend.yml'
+          rules:
+            - changes:
+                - 'backend/**/*'
+    github: |
+      # Option A: Path filters on triggers
+      # .github/workflows/frontend.yml
+      name: Frontend CI
+      on:
+        push:
+          paths: ['frontend/**']
+        pull_request:
+          paths: ['frontend/**']
+      jobs:
+        build:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: make build-frontend
+
+      # Option B: dorny/paths-filter in a single workflow
+      # .github/workflows/ci.yml
+      name: CI
+      on: [push, pull_request]
+      jobs:
+        detect-changes:
+          runs-on: ubuntu-latest
+          outputs:
+            frontend: ${{ steps.filter.outputs.frontend }}
+            backend: ${{ steps.filter.outputs.backend }}
+          steps:
+            - uses: actions/checkout@v4
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                filters: |
+                  frontend:
+                    - 'frontend/**'
+                  backend:
+                    - 'backend/**'
+        frontend:
+          needs: [detect-changes]
+          if: needs.detect-changes.outputs.frontend == 'true'
+          uses: ./.github/workflows/frontend.yml
+        backend:
+          needs: [detect-changes]
+          if: needs.detect-changes.outputs.backend == 'true'
+          uses: ./.github/workflows/backend.yml
+    notes: |
+      include:rules with changes: -> on.<event>.paths or dorny/paths-filter.
+      include:rules with if: -> job-level if: condition.
+      The paths-filter approach keeps everything in one workflow for visibility.
+
+  # ---------------------------------------------------------------------------
+  # 8.7  trigger:include — Child pipelines (same repo)
+  # ---------------------------------------------------------------------------
+  child_pipeline:
+    description: "Spawn a child pipeline from a YAML file in the same repo"
+    gitlab: |
+      stages: [generate, child]
+
+      generate-config:
+        stage: generate
+        script: echo "Generating child config..."
+        # Child pipeline with static YAML
+      trigger-child:
+        stage: child
+        trigger:
+          include: ci/child-pipeline.yml
+          strategy: depend
+          forward:
+            yaml_variables: true
+            pipeline_variables: true
+
+      # ci/child-pipeline.yml
+      child-build:
+        stage: build
+        script: make build
+      child-test:
+        stage: test
+        script: make test
+    github: |
+      # .github/workflows/parent.yml
+      name: Parent
+      on: [push]
+      jobs:
+        generate:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: echo "Generating config..."
+        child:
+          needs: [generate]
+          uses: ./.github/workflows/child.yml
+          with:
+            ref: ${{ github.ref }}
+          secrets: inherit
+
+      # .github/workflows/child.yml
+      name: Child
+      on:
+        workflow_call:
+          inputs:
+            ref:
+              type: string
+              required: false
+      jobs:
+        build:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+              with:
+                ref: ${{ inputs.ref }}
+            - run: make build
+        test:
+          runs-on: ubuntu-latest
+          needs: [build]
+          steps:
+            - uses: actions/checkout@v4
+            - run: make test
+    notes: |
+      trigger:include -> reusable workflow via workflow_call.
+      strategy: depend -> the parent job waits; GitHub does this by default.
+      forward:yaml_variables -> Pass as workflow_call inputs.
+      forward:pipeline_variables -> 'secrets: inherit' passes all secrets.
+      Limitations:
+        - Max 4 levels of reusable workflow nesting.
+        - Max 20 reusable workflow calls per workflow file.
+        - Reusable workflow callee cannot call another reusable workflow
+          that is also in a private repo (unless same owner).
+
+  # ---------------------------------------------------------------------------
+  # 8.8  trigger:include with artifact (dynamic child pipelines)
+  # ---------------------------------------------------------------------------
+  dynamic_child_pipeline:
+    description: "Generate child pipeline YAML dynamically as an artifact"
+    gitlab: |
+      generate-pipeline:
+        stage: build
+        script:
+          - python generate_ci.py > child.yml
+        artifacts:
+          paths: [child.yml]
+
+      run-dynamic:
+        stage: deploy
+        trigger:
+          include:
+            - artifact: child.yml
+              job: generate-pipeline
+          strategy: depend
+    github: |
+      # GitHub cannot dynamically create workflows at runtime.
+      # Workarounds:
+
+      # Option A: Generate a matrix and use it in the same workflow
+      name: Dynamic CI
+      on: [push]
+      jobs:
+        generate:
+          runs-on: ubuntu-latest
+          outputs:
+            matrix: ${{ steps.gen.outputs.matrix }}
+          steps:
+            - uses: actions/checkout@v4
+            - id: gen
+              run: |
+                MATRIX=$(python generate_matrix.py)
+                echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+        run:
+          needs: [generate]
+          runs-on: ubuntu-latest
+          strategy:
+            matrix: ${{ fromJson(needs.generate.outputs.matrix) }}
+          steps:
+            - uses: actions/checkout@v4
+            - run: echo "Running for ${{ matrix.target }}"
+
+      # Option B: Commit generated workflow and trigger via workflow_dispatch
+      # (Requires a PAT with workflow scope)
+      name: Generate and Run
+      on: [push]
+      jobs:
+        generate:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: python generate_ci.py > .github/workflows/generated.yml
+            - uses: stefanzweifel/git-auto-commit-action@v5
+              with:
+                commit_message: "chore: update generated workflow"
+            - uses: actions/github-script@v7
+              with:
+                github-token: ${{ secrets.PAT_TOKEN }}
+                script: |
+                  await github.rest.actions.createWorkflowDispatch({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    workflow_id: 'generated.yml',
+                    ref: '${{ github.ref_name }}',
+                  })
+    notes: |
+      Dynamic child pipelines have no direct GitHub equivalent.
+      Option A (matrix output) covers the common case of running a generated
+      set of jobs. Option B (commit + dispatch) is a heavier workaround.
+      Neither is fully equivalent to GitLab's artifact-based child pipeline.
+
+  # ---------------------------------------------------------------------------
+  # 8.9  trigger:project — Multi-project pipelines
+  # ---------------------------------------------------------------------------
+  multi_project_pipeline:
+    description: "Trigger a pipeline in a different project"
+    gitlab: |
+      deploy-microservice:
+        stage: deploy
+        trigger:
+          project: backend-team/auth-service
+          branch: main
+          strategy: depend
+        variables:
+          DEPLOY_ENV: production
+          UPSTREAM_SHA: $CI_COMMIT_SHA
+    github: |
+      # Option A: repository_dispatch (recommended for event-based triggers)
+      deploy-microservice:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: peter-evans/repository-dispatch@v3
+            with:
+              token: ${{ secrets.PAT_TOKEN }}
+              repository: backend-team/auth-service
+              event-type: deploy
+              client-payload: |
+                {
+                  "deploy_env": "production",
+                  "upstream_sha": "${{ github.sha }}"
+                }
+
+      # In backend-team/auth-service/.github/workflows/deploy.yml:
+      name: Deploy
+      on:
+        repository_dispatch:
+          types: [deploy]
+      jobs:
+        deploy:
+          runs-on: ubuntu-latest
+          env:
+            DEPLOY_ENV: ${{ github.event.client_payload.deploy_env }}
+            UPSTREAM_SHA: ${{ github.event.client_payload.upstream_sha }}
+          steps:
+            - uses: actions/checkout@v4
+            - run: ./deploy.sh
+
+      # Option B: workflow_dispatch via API
+      deploy-microservice:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/github-script@v7
+            with:
+              github-token: ${{ secrets.PAT_TOKEN }}
+              script: |
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: 'backend-team',
+                  repo: 'auth-service',
+                  workflow_id: 'deploy.yml',
+                  ref: 'main',
+                  inputs: {
+                    deploy_env: 'production',
+                    upstream_sha: '${{ github.sha }}'
+                  }
+                })
+    notes: |
+      trigger:project -> repository_dispatch or workflow_dispatch via API.
+      Both require a PAT with repo/workflow scope.
+      trigger:strategy: depend -> GitHub fire-and-forget by default.
+        To wait: poll the triggered run via API until completion.
+      trigger:variables -> Passed via client-payload or dispatch inputs.
+      repository_dispatch is simpler; workflow_dispatch allows input validation.
+
+  # ---------------------------------------------------------------------------
+  # 8.10  needs:pipeline / needs:project — Cross-pipeline artifacts
+  # ---------------------------------------------------------------------------
+  cross_pipeline_artifacts:
+    description: "Download artifacts from another pipeline or project"
+    gitlab: |
+      # Artifacts from upstream pipeline
+      downstream-job:
+        needs:
+          - pipeline: $UPSTREAM_PIPELINE_ID
+            job: build
+            artifacts: true
+
+      # Artifacts from another project
+      use-shared-build:
+        needs:
+          - project: shared-team/build-artifacts
+            job: compile
+            ref: main
+            artifacts: true
+    github: |
+      # Option A: Same repo, different workflow — use actions/download-artifact
+      #   (only works within the same workflow run by default)
+
+      # Option B: Cross-workflow in same repo — dawidd6/action-download-artifact
+      use-upstream-artifacts:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: dawidd6/action-download-artifact@v6
+            with:
+              workflow: build.yml
+              name: build-output
+              branch: main
+
+      # Option C: Cross-repo artifacts — download via API
+      use-shared-build:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: dawidd6/action-download-artifact@v6
+            with:
+              github_token: ${{ secrets.PAT_TOKEN }}
+              repo: shared-team/build-artifacts
+              workflow: compile.yml
+              name: compiled-output
+              branch: main
+    notes: |
+      needs:pipeline -> dawidd6/action-download-artifact (cross-workflow).
+      needs:project -> Same action with repo: parameter and a PAT.
+      GitHub upload-artifact/download-artifact only works within one workflow run.
+      For cross-run or cross-repo, a third-party action or API call is required.
+
+  # ---------------------------------------------------------------------------
+  # 8.11  spec:inputs — Parameterized includes
+  # ---------------------------------------------------------------------------
+  spec_inputs:
+    description: "Parameterized CI config files with typed inputs"
+    gitlab: |
+      # template.yml
+      spec:
+        inputs:
+          environment:
+            type: string
+            default: staging
+          deploy_enabled:
+            type: boolean
+            default: true
+          replicas:
+            type: number
+            default: 2
+      ---
+      deploy:
+        stage: deploy
+        script:
+          - echo "Deploying to $[[ inputs.environment ]]"
+          - kubectl scale --replicas=$[[ inputs.replicas ]]
+        rules:
+          - if: $[[ inputs.deploy_enabled ]]
+
+      # consumer .gitlab-ci.yml
+      include:
+        - local: template.yml
+          inputs:
+            environment: production
+            deploy_enabled: true
+            replicas: 5
+    github: |
+      # .github/workflows/deploy.yml (reusable)
+      name: Deploy
+      on:
+        workflow_call:
+          inputs:
+            environment:
+              type: string
+              default: staging
+            deploy_enabled:
+              type: boolean
+              default: true
+            replicas:
+              type: number
+              default: 2
+      jobs:
+        deploy:
+          runs-on: ubuntu-latest
+          if: ${{ inputs.deploy_enabled }}
+          steps:
+            - uses: actions/checkout@v4
+            - run: |
+                echo "Deploying to ${{ inputs.environment }}"
+                kubectl scale --replicas=${{ inputs.replicas }}
+
+      # .github/workflows/ci.yml (caller)
+      name: CI
+      on: [push]
+      jobs:
+        deploy:
+          uses: ./.github/workflows/deploy.yml
+          with:
+            environment: production
+            deploy_enabled: true
+            replicas: 5
+    notes: |
+      spec:inputs -> workflow_call.inputs.
+      Supported types: string, boolean, number (same in both).
+      $[[ inputs.X ]] -> ${{ inputs.X }}.
+      Input validation: GitLab has options/regex; GitHub has type + required only.
+
+  # ---------------------------------------------------------------------------
+  # 8.12  Nested include chains — Deep composition
+  # ---------------------------------------------------------------------------
+  nested_includes:
+    description: "Files that include other files (transitive includes)"
+    gitlab: |
+      # .gitlab-ci.yml
+      include:
+        - local: '/ci/main.yml'
+
+      # ci/main.yml
+      include:
+        - local: '/ci/jobs/build.yml'
+        - local: '/ci/jobs/test.yml'
+        - project: 'devops/shared-templates'
+          file: '/deploy.yml'
+
+      # ci/jobs/build.yml
+      build:
+        script: make build
+
+      # ci/jobs/test.yml
+      include:
+        - local: '/ci/jobs/lint.yml'
+      test:
+        script: make test
+
+      # ci/jobs/lint.yml
+      lint:
+        script: make lint
+    github: |
+      # GitHub reusable workflows support max 4 levels of nesting.
+      # For deeply nested GitLab includes, flatten into fewer levels.
+
+      # .github/workflows/ci.yml (top-level caller)
+      name: CI
+      on: [push, pull_request]
+      jobs:
+        build:
+          uses: ./.github/workflows/build.yml
+        test:
+          needs: [build]
+          uses: ./.github/workflows/test.yml
+        lint:
+          uses: ./.github/workflows/lint.yml
+        deploy:
+          needs: [test, lint]
+          uses: devops/shared-templates/.github/workflows/deploy.yml@main
+
+      # .github/workflows/build.yml
+      on: { workflow_call: {} }
+      jobs:
+        build:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: make build
+
+      # .github/workflows/test.yml
+      on: { workflow_call: {} }
+      jobs:
+        test:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: make test
+
+      # .github/workflows/lint.yml
+      on: { workflow_call: {} }
+      jobs:
+        lint:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - run: make lint
+    notes: |
+      GitLab supports up to 150 transitive includes with no depth limit.
+      GitHub reusable workflows max out at 4 levels deep and 20 calls per file.
+      Migration strategy for deep nesting:
+        1. Flatten the include tree — identify leaf jobs.
+        2. Group related jobs into reusable workflows (one per logical unit).
+        3. Wire them together with needs: in a top-level caller workflow.
+        4. For > 20 reusable calls, split into multiple top-level workflows.
+
+# ============================================================================
+# 9. UNSUPPORTED / WORKAROUND-NEEDED FEATURES
 # ============================================================================
 unsupported:
   include_templates:

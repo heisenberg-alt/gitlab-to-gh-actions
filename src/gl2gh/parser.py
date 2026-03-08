@@ -245,6 +245,18 @@ class GitLabCIParser:
             job.tags = list(template.tags)
         if not job.services and template.services:
             job.services = list(template.services)
+        if not job.rules and template.rules:
+            job.rules = list(template.rules)
+        if not job.timeout and template.timeout:
+            job.timeout = template.timeout
+        if not job.retry and template.retry:
+            job.retry = template.retry
+        if not job.parallel and template.parallel:
+            job.parallel = template.parallel
+        if job.allow_failure is False and template.allow_failure:
+            job.allow_failure = template.allow_failure
+        if job.when == "on_success" and template.when != "on_success":
+            job.when = template.when
 
     def _parse_script(self, raw: Any) -> list[str]:
         if not raw:

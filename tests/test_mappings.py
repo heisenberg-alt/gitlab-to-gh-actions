@@ -2,6 +2,7 @@
 
 from gl2gh.mappings.rules import (
     convert_rules_to_if,
+    convert_trigger_to_reusable_workflow,
     image_to_runner,
     normalize_service,
     parse_expire_in_days,
@@ -210,3 +211,77 @@ class TestStagesToNeedsGraph:
         assert needs["lint"] == []
         assert needs["unit"] == []
         assert set(needs["deploy"]) == {"lint", "unit"}
+
+
+class TestConvertTriggerToReusableWorkflow:
+    def test_cross_project_trigger(self):
+        trigger = {"project": "org/other-repo", "branch": "main"}
+        caller, child_wf, warnings = convert_trigger_to_reusable_workflow(
+            trigger, "deploy_child"
+        )
+        assert "uses" in caller
+        assert "org/other-repo" in caller["uses"]
+        assert "@main" in caller["uses"]
+        assert child_wf is None  # No child workflow for cross-project
+        assert len(warnings) > 0
+
+    def test_cross_project_with_file(self):
+        trigger = {
+            "project": "org/infra",
+            "file": ".github/workflows/deploy.yml",
+            "branch": "release",
+        }
+        caller, child_wf, warnings = convert_trigger_to_reusable_workflow(
+            trigger, "infra_deploy"
+        )
+        assert caller["uses"] == "org/infra/.github/workflows/deploy.yml@release"
+        assert child_wf is None
+
+    def test_cross_project_strategy_depend(self):
+        trigger = {"project": "org/repo", "strategy": "depend"}
+        _, _, warnings = convert_trigger_to_reusable_workflow(trigger, "child")
+        assert any("strategy: depend" in w for w in warnings)
+
+    def test_child_pipeline_include_string(self):
+        trigger = {"include": "ci/child.yml"}
+        caller, child_wf, warnings = convert_trigger_to_reusable_workflow(
+            trigger, "trigger_child"
+        )
+        assert ".github/workflows/" in caller["uses"]
+        assert child_wf is not None
+        assert child_wf["on"] == {"workflow_call": {}}
+        assert "jobs" in child_wf
+
+    def test_child_pipeline_include_list(self):
+        trigger = {"include": [{"local": "/templates/deploy.gitlab-ci.yml"}]}
+        caller, child_wf, warnings = convert_trigger_to_reusable_workflow(
+            trigger, "deploy"
+        )
+        assert child_wf is not None
+        assert "workflow_call" in child_wf["on"]
+        assert ".yml" in caller["uses"]
+
+    def test_child_pipeline_include_dict(self):
+        trigger = {"include": {"local": "ci/build.yml"}}
+        caller, child_wf, warnings = convert_trigger_to_reusable_workflow(
+            trigger, "build"
+        )
+        assert child_wf is not None
+        assert "uses" in caller
+
+    def test_child_pipeline_forward_variables(self):
+        trigger = {
+            "include": "child.yml",
+            "forward": {"pipeline_variables": True},
+        }
+        _, _, warnings = convert_trigger_to_reusable_workflow(trigger, "fwd")
+        assert any("forward" in w.lower() for w in warnings)
+
+    def test_bare_trigger(self):
+        trigger = {}
+        caller, child_wf, warnings = convert_trigger_to_reusable_workflow(
+            trigger, "my_trigger"
+        )
+        assert child_wf is not None
+        assert "my_trigger.yml" in caller["uses"]
+        assert child_wf["on"] == {"workflow_call": {}}

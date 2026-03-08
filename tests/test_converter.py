@@ -85,3 +85,116 @@ class TestGitLabToGitHubConverter:
         result = converter.convert(pipeline)
         content = list(result.output_workflows.values())[0]
         assert "My Pipeline" in content
+
+    def test_trigger_child_pipeline(self):
+        """trigger: include: generates a reusable workflow and caller job."""
+        content = """
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - echo build
+
+deploy_child:
+  stage: deploy
+  trigger:
+    include: ci/deploy.yml
+"""
+        pipeline = self.parser.parse_string(content)
+        result = self.converter.convert(pipeline)
+        assert result.success
+
+        # Main workflow should contain the caller job
+        main_wf = list(result.output_workflows.values())[0]
+        assert "uses:" in main_wf or "workflow_call" in str(result.output_workflows)
+
+        # A child reusable workflow file should be generated
+        assert len(result.output_workflows) >= 2
+        child_keys = [k for k in result.output_workflows if k != "ci.yml"]
+        assert len(child_keys) >= 1
+        child_content = result.output_workflows[child_keys[0]]
+        assert "workflow_call" in child_content
+
+    def test_trigger_cross_project(self):
+        """trigger: project: generates a uses: reference without child file."""
+        content = """
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - echo build
+
+infra:
+  stage: deploy
+  trigger:
+    project: org/infra-repo
+    branch: main
+"""
+        pipeline = self.parser.parse_string(content)
+        result = self.converter.convert(pipeline)
+        assert result.success
+
+        main_wf = list(result.output_workflows.values())[0]
+        assert "org/infra-repo" in main_wf
+        assert any("cross-project" in w for w in result.warnings)
+
+    def test_trigger_preserves_needs(self):
+        """Trigger jobs should preserve stage-based dependency ordering."""
+        content = """
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - echo build
+
+deploy_child:
+  stage: deploy
+  trigger:
+    include: ci/deploy.yml
+"""
+        pipeline = self.parser.parse_string(content)
+        result = self.converter.convert(pipeline)
+        assert result.success
+
+        main_wf = list(result.output_workflows.values())[0]
+        wf = yaml.safe_load(
+            "\n".join(l for l in main_wf.split("\n") if not l.startswith("#"))
+        )
+        deploy_job = wf["jobs"].get("deploy_child")
+        assert deploy_job is not None
+        assert "needs" in deploy_job
+        assert "build" in deploy_job["needs"]
+
+    def test_duplicate_service_names(self):
+        """Two services with the same base name should not overwrite each other."""
+        content = """
+stages:
+  - test
+
+test:
+  stage: test
+  image: python:3.11
+  services:
+    - postgres:14
+    - my-registry/postgres:15
+  script:
+    - pytest
+"""
+        pipeline = self.parser.parse_string(content)
+        result = self.converter.convert(pipeline)
+        assert result.success
+        main_wf = list(result.output_workflows.values())[0]
+        wf = yaml.safe_load(
+            "\n".join(l for l in main_wf.split("\n") if not l.startswith("#"))
+        )
+        services = wf["jobs"]["test"]["services"]
+        assert len(services) == 2
