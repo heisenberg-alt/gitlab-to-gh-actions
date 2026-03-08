@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gl2gh - Building a GitLab CI to GitHub Actions Migration Tool</title>
+    <meta name="description" content="How and why I built gl2gh — a hybrid rule-based and AI-powered tool for converting GitLab CI/CD pipelines to GitHub Actions workflows.">
+    <style>
+        /* ============================================================
+           Reset and Base
+           ============================================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #1c2128;
+            --bg-card: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #bc8cff;
+            --accent-orange: #d29922;
+            --accent-pink: #f778ba;
+            --gradient-start: #1a1f36;
+            --gradient-end: #0d1117;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        a:hover { text-decoration: underline; }
+
+        /* ============================================================
+           Layout
+           ============================================================ */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ============================================================
+           Navigation
+           ============================================================ */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+
+        .nav-logo span { color: var(--accent-blue); }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .nav-links a.active { color: var(--accent-blue); }
+
+        /* ============================================================
+           Blog Header
+           ============================================================ */
+        .blog-header {
+            padding: 140px 0 48px;
+            background: linear-gradient(180deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .blog-header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 700px;
+            height: 400px;
+            background: radial-gradient(ellipse at center, rgba(88, 166, 255, 0.07) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .blog-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .blog-date {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .blog-tag {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .tag-devops {
+            background: rgba(88, 166, 255, 0.12);
+            color: var(--accent-blue);
+        }
+
+        .tag-python {
+            background: rgba(63, 185, 80, 0.12);
+            color: var(--accent-green);
+        }
+
+        .tag-ai {
+            background: rgba(188, 140, 255, 0.12);
+            color: var(--accent-purple);
+        }
+
+        .blog-header h1 {
+            font-size: 42px;
+            font-weight: 800;
+            letter-spacing: -1.5px;
+            line-height: 1.15;
+            margin-bottom: 16px;
+            max-width: 760px;
+        }
+
+        .blog-header h1 .highlight {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .blog-subtitle {
+            font-size: 18px;
+            color: var(--text-secondary);
+            max-width: 640px;
+            line-height: 1.6;
+        }
+
+        .reading-time {
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* ============================================================
+           Blog Content
+           ============================================================ */
+        .blog-content {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 56px 24px 80px;
+        }
+
+        .blog-content h2 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin: 56px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .blog-content h2:first-child {
+            margin-top: 0;
+        }
+
+        .blog-content h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 36px 0 14px;
+            color: var(--accent-blue);
+        }
+
+        .blog-content p {
+            font-size: 16px;
+            line-height: 1.8;
+            color: var(--text-secondary);
+            margin-bottom: 18px;
+        }
+
+        .blog-content strong {
+            color: var(--text-primary);
+        }
+
+        .blog-content ul, .blog-content ol {
+            margin: 12px 0 20px 24px;
+            color: var(--text-secondary);
+        }
+
+        .blog-content li {
+            margin-bottom: 8px;
+            line-height: 1.7;
+        }
+
+        .blog-content li strong {
+            color: var(--text-primary);
+        }
+
+        /* Inline code */
+        .blog-content code {
+            font-family: var(--font-mono);
+            font-size: 14px;
+            background: var(--bg-tertiary);
+            padding: 2px 7px;
+            border-radius: 5px;
+            color: var(--accent-blue);
+        }
+
+        /* Code blocks */
+        .blog-content pre {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px 24px;
+            overflow-x: auto;
+            margin: 20px 0 24px;
+            position: relative;
+        }
+
+        .blog-content pre code {
+            background: none;
+            padding: 0;
+            border-radius: 0;
+            font-size: 13px;
+            line-height: 1.75;
+            color: var(--text-primary);
+        }
+
+        .code-label {
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 12px;
+            border-radius: 0 10px 0 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            border-left: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Callout boxes */
+        .callout {
+            border-radius: 10px;
+            padding: 18px 22px;
+            margin: 24px 0;
+            border: 1px solid transparent;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+            font-size: 15px;
+        }
+
+        .callout-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .callout-info {
+            background: rgba(88, 166, 255, 0.06);
+            border-color: rgba(88, 166, 255, 0.2);
+        }
+
+        .callout-info .callout-title {
+            color: var(--accent-blue);
+        }
+
+        .callout-success {
+            background: rgba(63, 185, 80, 0.06);
+            border-color: rgba(63, 185, 80, 0.2);
+        }
+
+        .callout-success .callout-title {
+            color: var(--accent-green);
+        }
+
+        .callout-warning {
+            background: rgba(210, 153, 34, 0.06);
+            border-color: rgba(210, 153, 34, 0.2);
+        }
+
+        .callout-warning .callout-title {
+            color: var(--accent-orange);
+        }
+
+        /* Comparison side-by-side */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .comparison-pane {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .comparison-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .comparison-label .badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .badge-gitlab {
+            background: rgba(210, 153, 34, 0.12);
+            color: var(--accent-orange);
+        }
+
+        .badge-github {
+            background: rgba(63, 185, 80, 0.12);
+            color: var(--accent-green);
+        }
+
+        .comparison-pane pre {
+            margin: 0;
+            border: none;
+            border-radius: 0;
+            font-size: 12px;
+        }
+
+        .comparison-pane pre code {
+            font-size: 12px;
+        }
+
+        /* Architecture diagram */
+        .arch-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin: 32px 0;
+            flex-wrap: wrap;
+        }
+
+        .arch-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px 22px;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .arch-box-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .arch-box-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .arch-box.blue { border-color: rgba(88, 166, 255, 0.3); }
+        .arch-box.blue .arch-box-title { color: var(--accent-blue); }
+
+        .arch-box.green { border-color: rgba(63, 185, 80, 0.3); }
+        .arch-box.green .arch-box-title { color: var(--accent-green); }
+
+        .arch-box.purple { border-color: rgba(188, 140, 255, 0.3); }
+        .arch-box.purple .arch-box-title { color: var(--accent-purple); }
+
+        .arch-box.orange { border-color: rgba(210, 153, 34, 0.3); }
+        .arch-box.orange .arch-box-title { color: var(--accent-orange); }
+
+        .arch-arrow {
+            font-size: 22px;
+            color: var(--text-muted);
+            padding: 0 12px;
+        }
+
+        /* Takeaway list */
+        .takeaway-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .takeaway-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 18px 20px;
+        }
+
+        .takeaway-card .tk-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .takeaway-card .tk-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Mapping table */
+        .mapping-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0 24px;
+            font-size: 14px;
+        }
+
+        .mapping-table th {
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .mapping-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .mapping-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .mapping-table code {
+            font-size: 13px;
+        }
+
+        /* Separator */
+        .blog-content hr {
+            border: none;
+            border-top: 1px solid var(--border-color);
+            margin: 48px 0;
+        }
+
+        /* ============================================================
+           Footer
+           ============================================================ */
+        footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 40px 0;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+
+        .footer-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .footer-logo span { color: var(--accent-blue); }
+
+        .footer-text {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .footer-links a:hover { color: var(--text-primary); }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 900px) {
+            .blog-header h1 { font-size: 28px; }
+            .nav-links { display: none; }
+            .comparison { grid-template-columns: 1fr; }
+            .takeaway-grid { grid-template-columns: 1fr; }
+            .arch-flow { flex-direction: column; gap: 8px; }
+            .arch-arrow { transform: rotate(90deg); }
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="container">
+            <a href="index.html" class="nav-logo" style="text-decoration:none;"><span>gl</span>2gh</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#how-it-works">How It Works</a></li>
+                <li><a href="index.html#quickstart">Quick Start</a></li>
+                <li><a href="converter.html">Converter</a></li>
+                <li><a href="docs.html">Docs</a></li>
+                <li><a href="blog.html" class="active">Blog</a></li>
+                <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Blog Header -->
+    <div class="blog-header">
+        <div class="container">
+            <div class="blog-meta">
+                <span class="blog-date">March 2026</span>
+                <span class="blog-tag tag-devops">DevOps</span>
+                <span class="blog-tag tag-python">Python</span>
+                <span class="blog-tag tag-ai">AI-Powered</span>
+            </div>
+            <h1>Building a <span class="highlight">GitLab CI to GitHub Actions</span> Migration Tool</h1>
+            <p class="blog-subtitle">
+                How I built gl2gh — a hybrid rule-based and AI-powered CLI tool that converts
+                <code>.gitlab-ci.yml</code> pipelines into GitHub Actions workflows, handling
+                30+ variable translations, stage dependency graphs, and complex CI patterns.
+            </p>
+            <p class="reading-time">8 min read</p>
+        </div>
+    </div>
+
+    <!-- Blog Body -->
+    <article class="blog-content">
+
+        <h2>The Problem</h2>
+
+        <p>
+            If you've ever had to migrate a project from GitLab to GitHub, you know the CI/CD
+            pipeline is one of the hardest parts to bring over. The Git repository itself is
+            straightforward — add a remote and push. But the pipeline? That's a different story.
+        </p>
+
+        <p>
+            GitLab CI and GitHub Actions have fundamentally different models. GitLab uses
+            <strong>sequential stages</strong> where jobs automatically depend on the previous
+            stage. GitHub Actions uses an <strong>explicit dependency graph</strong> with the
+            <code>needs</code> keyword. Variables have different names, caching works through
+            dedicated actions rather than built-in keywords, and concepts like <code>extends</code>
+            templates and <code>only/except</code> rules have no direct GitHub equivalent.
+        </p>
+
+        <p>
+            I found myself repeatedly doing this conversion by hand across projects — reading
+            GitLab CI docs, cross-referencing with Actions docs, translating variables one by one,
+            restructuring stages into dependency graphs. Every pipeline took an hour or more of
+            tedious, error-prone work. So I decided to automate it.
+        </p>
+
+        <h2>Existing Solutions</h2>
+
+        <p>
+            Before writing any code, I looked for existing tools. GitHub has an
+            <a href="https://docs.github.com/en/actions/migrating-to-github-actions/manually-migrating-to-github-actions/migrating-from-gitlab-cicd-to-github-actions">official migration guide</a>
+            but it's a reference document, not an automation tool. It gives you the concept
+            mappings but leaves the actual translation as manual work.
+        </p>
+
+        <p>
+            There are a few community scripts and converters, but most handle only the most
+            basic cases — simple <code>script</code> steps and <code>image</code> declarations.
+            None of them handle the full breadth of GitLab CI features:
+        </p>
+
+        <ul>
+            <li>Variable translation (<code>$CI_COMMIT_SHA</code> → <code>${{ github.sha }}</code>, 30+ mappings)</li>
+            <li>Stage-based ordering to explicit <code>needs</code> dependency graphs</li>
+            <li><code>extends</code> and YAML anchors for template resolution</li>
+            <li>Cache and artifact conversion to dedicated Actions</li>
+            <li>Docker-in-Docker builds with service containers</li>
+            <li>Matrix builds (<code>parallel.matrix</code> → <code>strategy.matrix</code>)</li>
+            <li><code>rules:</code> conditions with variable-aware <code>if:</code> expressions</li>
+            <li>Environment and deployment configurations</li>
+            <li>Child/nested pipelines with <code>trigger:</code></li>
+        </ul>
+
+        <p>
+            I didn't find anything that covered even half of these, so I started building
+            <strong>gl2gh</strong>.
+        </p>
+
+        <h2>The Approach</h2>
+
+        <p>
+            The core insight was that roughly <strong>80% of CI migration work is deterministic</strong>.
+            Variable names have known translations. Stages map to dependency graphs algorithmically.
+            Cache keys follow predictable patterns. These don't need AI — they need a lookup table
+            and some careful conversion logic.
+        </p>
+
+        <p>
+            The remaining <strong>20%</strong> — multi-project pipelines, advanced <code>rules:</code>
+            conditions, custom runner configurations, complex Docker compositions — often lack a
+            clean one-to-one mapping. These benefit from an AI agent that can reason about intent
+            and generate appropriate GitHub Actions equivalents.
+        </p>
+
+        <p>
+            This led to a <strong>hybrid architecture</strong>:
+        </p>
+
+        <div class="arch-flow">
+            <div class="arch-box blue">
+                <div class="arch-box-title">Parse</div>
+                <div class="arch-box-desc">ruamel.yaml<br>Resolve extends</div>
+            </div>
+            <span class="arch-arrow">→</span>
+            <div class="arch-box green">
+                <div class="arch-box-title">Convert</div>
+                <div class="arch-box-desc">Rule-based<br>30+ mappings</div>
+            </div>
+            <span class="arch-arrow">→</span>
+            <div class="arch-box purple">
+                <div class="arch-box-title">Enhance</div>
+                <div class="arch-box-desc">AI agent<br>Optional</div>
+            </div>
+            <span class="arch-arrow">→</span>
+            <div class="arch-box orange">
+                <div class="arch-box-title">Validate</div>
+                <div class="arch-box-desc">Structure + security<br>Score 0–100</div>
+            </div>
+        </div>
+
+        <h3>Parsing: Handling YAML Anchors and Extends</h3>
+
+        <p>
+            GitLab CI heavily uses YAML anchors (<code>&amp;anchor</code>) and aliases
+            (<code>*anchor</code>) for template reuse, plus the <code>extends</code>
+            keyword for job inheritance. Standard YAML parsers like PyYAML flatten anchors
+            on load, losing the template structure.
+        </p>
+
+        <p>
+            I chose <strong>ruamel.yaml</strong> specifically because it preserves anchor/alias
+            relationships. The parser resolves <code>extends</code> at parse time by merging
+            template properties into jobs, so the converter only ever sees fully resolved job
+            definitions. Template jobs (prefixed with <code>.</code>, like <code>.python_base</code>)
+            are flagged as <code>is_template=True</code> and excluded from the final workflow.
+        </p>
+
+        <h3>Conversion: Pure Functions and Lookup Tables</h3>
+
+        <p>
+            The conversion engine is built entirely on <strong>pure functions</strong> — no side
+            effects, no I/O. Every mapping rule takes a GitLab value in and returns a GitHub
+            Actions equivalent out. This makes them independently testable and easy to extend.
+        </p>
+
+        <p>Here's a sample of the variable translation table:</p>
+
+        <table class="mapping-table">
+            <thead>
+                <tr>
+                    <th>GitLab CI Variable</th>
+                    <th>GitHub Actions Equivalent</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>$CI_COMMIT_SHA</code></td>
+                    <td><code>${{ github.sha }}</code></td>
+                </tr>
+                <tr>
+                    <td><code>$CI_COMMIT_REF_NAME</code></td>
+                    <td><code>${{ github.ref_name }}</code></td>
+                </tr>
+                <tr>
+                    <td><code>$CI_PIPELINE_ID</code></td>
+                    <td><code>${{ github.run_id }}</code></td>
+                </tr>
+                <tr>
+                    <td><code>$CI_REGISTRY_IMAGE</code></td>
+                    <td><code>ghcr.io/${{ github.repository }}</code></td>
+                </tr>
+                <tr>
+                    <td><code>$CI_REGISTRY_PASSWORD</code></td>
+                    <td><code>${{ secrets.GITHUB_TOKEN }}</code></td>
+                </tr>
+                <tr>
+                    <td><code>$CI_MERGE_REQUEST_IID</code></td>
+                    <td><code>${{ github.event.pull_request.number }}</code></td>
+                </tr>
+                <tr>
+                    <td><code>$CI_PROJECT_DIR</code></td>
+                    <td><code>${{ github.workspace }}</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>
+            Stage ordering is converted algorithmically. The <code>stages_to_needs_graph</code>
+            function takes the ordered list of stages and builds an explicit dependency map:
+            every job in stage N depends on all jobs in stage N-1. This preserves the sequential
+            guarantee while giving GitHub Actions the explicit graph it requires.
+        </p>
+
+        <h3>AI Enhancement: The Copilot Agent</h3>
+
+        <p>
+            For complex patterns that the rule engine can't handle cleanly, gl2gh optionally sends
+            the baseline output to a <strong>GitHub Copilot agent</strong> with tool definitions.
+            The agent enters an agentic loop — Copilot emits tool calls (<code>validate_yaml</code>,
+            <code>save_workflow</code>, <code>add_warning</code>), the agent executes them and
+            feeds results back, repeating for up to 8 iterations until the model is satisfied.
+        </p>
+
+        <div class="callout callout-info">
+            <div class="callout-title">Design decision</div>
+            <p>
+                AI enhancement is strictly opt-in via the <code>--ai</code> flag. The rule-based
+                converter always produces output first. If AI enhancement fails for any reason,
+                the system falls back to the rule-based result with a warning. The user always gets
+                usable output.
+            </p>
+        </div>
+
+        <h3>Validation and Scoring</h3>
+
+        <p>
+            Every converted workflow is automatically run through a <strong>ValidatorAgent</strong>
+            (YAML syntax, required keys, job structure, 9 security injection patterns) and an
+            <strong>OptimizerAgent</strong> that scores the workflow from 0 to 100. The score
+            considers caching, concurrency groups, parallelism, timeouts, and other best practices.
+            If the score falls below 60, gl2gh suggests using <code>--ai</code> mode for better results.
+        </p>
+
+        <h2>Before and After</h2>
+
+        <p>
+            Here's a real example. A typical Node.js GitLab CI pipeline with 4 stages, caching,
+            artifacts, and a deploy job that only runs on <code>main</code>:
+        </p>
+
+        <div class="comparison">
+            <div class="comparison-pane">
+                <div class="comparison-label">
+                    .gitlab-ci.yml
+                    <span class="badge badge-gitlab">Input</span>
+                </div>
+                <pre><code>stages:
+  - install
+  - test
+  - build
+  - deploy
+
+variables:
+  NODE_VERSION: "20"
+
+install:
+  stage: install
+  image: node:20
+  script:
+    - npm ci
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+
+test:
+  stage: test
+  image: node:20
+  script:
+    - npm test
+  artifacts:
+    reports:
+      junit: test-results.xml
+
+build:
+  stage: build
+  image: node:20
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+deploy:
+  stage: deploy
+  image: node:20
+  script:
+    - npm run deploy
+  environment:
+    name: production
+  only:
+    - main</code></pre>
+            </div>
+            <div class="comparison-pane">
+                <div class="comparison-label">
+                    github-actions.yml
+                    <span class="badge badge-github">Output</span>
+                </div>
+                <pre><code>name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/
+          key: ${{ github.ref_name }}
+      - run: npm ci
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [install]
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm test
+      - uses: dorny/test-reporter@v1
+        with:
+          name: Tests
+          path: test-results.xml
+          reporter: java-junit
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm run deploy</code></pre>
+            </div>
+        </div>
+
+        <p>
+            Note how stages became <code>needs</code> dependencies, the cache became an
+            <code>actions/cache@v4</code> step, artifacts became <code>actions/upload-artifact@v4</code>,
+            the JUnit report became <code>dorny/test-reporter@v1</code>, and
+            <code>only: [main]</code> became the <code>on: push</code> trigger filter.
+        </p>
+
+        <h2>Key Design Decisions</h2>
+
+        <div class="takeaway-grid">
+            <div class="takeaway-card">
+                <div class="tk-title">&#x1F4E6; Dataclass Models</div>
+                <div class="tk-desc">
+                    <code>GitLabJob</code>, <code>GitLabPipeline</code>, and
+                    <code>ConversionResult</code> are plain Python dataclasses — not Pydantic.
+                    They provide typed intermediate representations between parsing and conversion
+                    without the overhead of validation frameworks.
+                </div>
+            </div>
+            <div class="takeaway-card">
+                <div class="tk-title">&#x1F527; Pure Mapping Functions</div>
+                <div class="tk-desc">
+                    All functions in <code>mappings/rules.py</code> are pure — no side effects,
+                    no I/O. This makes them trivially testable and allowed me to build up
+                    126 tests with confidence.
+                </div>
+            </div>
+            <div class="takeaway-card">
+                <div class="tk-title">&#x1F310; ruamel.yaml over PyYAML</div>
+                <div class="tk-desc">
+                    GitLab CI's heavy use of YAML anchors and aliases made ruamel.yaml essential.
+                    PyYAML is only used for simpler validation tasks where anchor preservation
+                    isn't needed.
+                </div>
+            </div>
+            <div class="takeaway-card">
+                <div class="tk-title">&#x1F6E1;&#xFE0F; Graceful AI Fallback</div>
+                <div class="tk-desc">
+                    If AI enhancement fails (network error, rate limit, bad response), the system
+                    falls back to the rule-based result automatically. The user always gets usable
+                    output.
+                </div>
+            </div>
+            <div class="takeaway-card">
+                <div class="tk-title">&#x1F4C1; Local-First Output</div>
+                <div class="tk-desc">
+                    Workflows are written to disk for review, never pushed directly to GitHub.
+                    The <code>gh</code> CLI integration is optional convenience, not a requirement.
+                </div>
+            </div>
+            <div class="takeaway-card">
+                <div class="tk-title">&#x1F50D; Template Resolution at Parse Time</div>
+                <div class="tk-desc">
+                    <code>extends</code> is resolved in the parser, not the converter. The converter
+                    only sees fully resolved jobs, which simplifies the conversion logic significantly.
+                </div>
+            </div>
+        </div>
+
+        <h2>How to Use</h2>
+
+        <p>Install gl2gh (requires Python 3.11+):</p>
+
+        <pre><code>pip install -e ".[dev]"</code></pre>
+
+        <p>Convert a pipeline:</p>
+
+        <pre><code># Basic conversion
+gl2gh migrate .gitlab-ci.yml
+
+# Preview without writing files
+gl2gh migrate .gitlab-ci.yml --dry-run
+
+# With AI enhancement
+export GITHUB_TOKEN="ghp_..."
+gl2gh migrate .gitlab-ci.yml --ai
+
+# Pure rule-based (skip validation/optimization)
+gl2gh migrate .gitlab-ci.yml --pure-rules
+
+# Inspect pipeline structure
+gl2gh inspect .gitlab-ci.yml -v
+
+# Validate generated workflows
+gl2gh validate .github/workflows
+
+# Full repo migration
+gl2gh migrate-repo git@gitlab.com:org/repo.git org/repo --ai</code></pre>
+
+        <p>Or use the <a href="converter.html">web converter</a> — paste your YAML and get the result instantly.</p>
+
+        <div class="callout callout-success">
+            <div class="callout-title">Try it now</div>
+            <p>
+                The <a href="converter.html">web converter</a> runs the same rule-based engine
+                as the CLI. No account required, no data stored.
+            </p>
+        </div>
+
+        <h2>What I Learned</h2>
+
+        <p>
+            Building gl2gh reinforced a few things I've come to believe about developer tooling:
+        </p>
+
+        <ol>
+            <li>
+                <strong>Start with deterministic rules, add AI later.</strong> The rule-based
+                converter handles the vast majority of real-world pipelines. AI is a force
+                multiplier for edge cases, not a replacement for understanding the domain.
+            </li>
+            <li>
+                <strong>Pure functions make testing painless.</strong> With 126 tests and zero
+                I/O in the core conversion path, I can refactor aggressively without fear. Every
+                mapping rule has its own test case.
+            </li>
+            <li>
+                <strong>YAML is harder than it looks.</strong> Anchors, aliases, merge keys, and
+                the ambiguity of "is this a job or a global keyword?" made the parser the most
+                complex piece. The <code>GLOBAL_KEYWORDS</code> set in the parser determines which
+                root keys are configuration vs. job definitions.
+            </li>
+            <li>
+                <strong>Always produce output.</strong> Even if the conversion is imperfect, giving
+                the user a 90% correct workflow that they can manually fix is vastly better than
+                failing with an error. Warnings and conversion notes guide them to the remaining
+                manual work.
+            </li>
+        </ol>
+
+        <hr>
+
+        <h2>Links</h2>
+
+        <ul>
+            <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub Repository</a> — source code and issue tracker</li>
+            <li><a href="docs.html">Full Documentation</a> — CLI reference, mapping tables, configuration</li>
+            <li><a href="converter.html">Web Converter</a> — try it in your browser</li>
+            <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/blob/main/docs/MIGRATION_GUIDE.md">Migration Guide</a> — detailed before/after examples for every CI pattern</li>
+        </ul>
+
+        <p>
+            The tool is <a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/blob/main/LICENSE">MIT licensed</a>.
+            Contributions and bug reports are welcome.
+        </p>
+
+    </article>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <div class="footer-logo"><span>gl</span>2gh</div>
+                    <div class="footer-text" style="margin-top: 8px;">
+                        GitLab CI/CD to GitHub Actions migration tool.
+                    </div>
+                </div>
+                <ul class="footer-links">
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
+                    <li><a href="docs.html">Documentation</a></li>
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/issues">Issues</a></li>
+                    <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions/blob/main/LICENSE">MIT License</a></li>
+                </ul>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

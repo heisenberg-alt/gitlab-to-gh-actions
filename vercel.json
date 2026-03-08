@@ -24,6 +24,10 @@
       "dest": "/website/docs.html"
     },
     {
+      "src": "/blog(\\.html)?$",
+      "dest": "/website/blog.html"
+    },
+    {
       "src": "^/?$",
       "dest": "/website/index.html"
     }
