@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/convert.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "website/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/convert",
+      "dest": "/api/convert.py"
+    },
+    {
+      "src": "/converter(\\.html)?$",
+      "dest": "/website/converter.html"
+    },
+    {
+      "src": "^/?$",
+      "dest": "/website/index.html"
+    }
+  ]
+}

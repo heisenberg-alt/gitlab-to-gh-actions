@@ -544,13 +544,13 @@
     <!-- Navigation -->
     <nav>
         <div class="container">
-            <a href="/" class="nav-logo" style="text-decoration:none;"><span>gl</span>2gh</a>
+            <a href="index.html" class="nav-logo" style="text-decoration:none;"><span>gl</span>2gh</a>
             <ul class="nav-links">
-                <li><a href="/">Home</a></li>
-                <li><a href="/#features">Features</a></li>
-                <li><a href="/#how-it-works">How It Works</a></li>
-                <li><a href="/#quickstart">Quick Start</a></li>
-                <li><a href="/converter" class="active">Converter</a></li>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#how-it-works">How It Works</a></li>
+                <li><a href="index.html#quickstart">Quick Start</a></li>
+                <li><a href="converter.html" class="active">Converter</a></li>
                 <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
             </ul>
         </div>
@@ -796,6 +796,23 @@ deploy:
                 .replace(/"/g, '&quot;');
         }
 
+        // ── API URL detection ──────────────────────────────────
+        const VERCEL_API_BASE = 'https://gitlab-to-gh-actions.vercel.app';
+
+        function getApiUrl() {
+            const host = window.location.hostname;
+            // Local dev or Vercel — use same-origin relative URL
+            if (host === 'localhost' || host === '127.0.0.1' || host.includes('vercel.app')) {
+                return '/api/convert';
+            }
+            // GitHub Pages or other static host — use Vercel API
+            if (VERCEL_API_BASE) {
+                return VERCEL_API_BASE + '/api/convert';
+            }
+            // Fallback: try relative (will likely fail on static host)
+            return '/api/convert';
+        }
+
         // ── Convert ───────────────────────────────────────────────
         async function runConvert() {
             const content = inputEditor.value.trim();
@@ -809,40 +826,38 @@ deploy:
             setLoading(true);
             outputEditor.value = '';
 
+            let data = null;
             try {
-                const response = await fetch('/api/convert', {
+                const apiUrl = getApiUrl();
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content }),
                 });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    outputEditor.value = data.workflow || '';
-                    addMessage('success', 'Conversion successful!', []);
-
-                    if (data.warnings && data.warnings.length > 0) {
-                        addMessage('warning', `${data.warnings.length} warning(s)`, data.warnings);
-                    }
-                    if (data.notes && data.notes.length > 0) {
-                        addMessage('info', 'Conversion notes', data.notes);
-                    }
-                } else {
-                    const errors = data.errors || ['An unknown error occurred.'];
-                    addMessage('error', 'Conversion failed', errors);
-                    if (data.warnings && data.warnings.length > 0) {
-                        addMessage('warning', 'Warnings', data.warnings);
-                    }
-                }
+                data = await response.json();
             } catch (err) {
-                addMessage('error', 'Network error', [
-                    'Could not reach the conversion server. Make sure the server is running.',
-                    String(err),
-                ]);
-            } finally {
-                setLoading(false);
+                data = { success: false, errors: ['Could not reach the conversion API. Please ensure the server is running.'] };
             }
+
+            if (data.success) {
+                outputEditor.value = data.workflow || '';
+                addMessage('success', 'Conversion successful!', []);
+
+                if (data.warnings && data.warnings.length > 0) {
+                    addMessage('warning', `${data.warnings.length} warning(s)`, data.warnings);
+                }
+                if (data.notes && data.notes.length > 0) {
+                    addMessage('info', 'Conversion notes', data.notes);
+                }
+            } else {
+                const errors = data.errors || ['An unknown error occurred.'];
+                addMessage('error', 'Conversion failed', errors);
+                if (data.warnings && data.warnings.length > 0) {
+                    addMessage('warning', 'Warnings', data.warnings);
+                }
+            }
+
+            setLoading(false);
         }
 
         // ── Event listeners ───────────────────────────────────────
