@@ -28,6 +28,10 @@
       "dest": "/website/blog.html"
     },
     {
+      "src": "/roadmap(\\.html)?$",
+      "dest": "/website/roadmap.html"
+    },
+    {
       "src": "^/?$",
       "dest": "/website/index.html"
     }

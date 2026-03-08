@@ -46,6 +46,11 @@ def blog() -> object:
     return send_from_directory(os.path.dirname(__file__), "blog.html")
 
 
+@app.route("/roadmap")
+def roadmap() -> object:
+    return send_from_directory(os.path.dirname(__file__), "roadmap.html")
+
+
 @app.route("/api/convert", methods=["POST"])
 def convert() -> object:
     if request.content_length and request.content_length > MAX_PAYLOAD_BYTES:

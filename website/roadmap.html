@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gl2gh - v2.0 Roadmap</title>
+    <meta name="description" content="What's coming in gl2gh v2.0 — full repository migration, merge request to pull request translation, branch renaming, batch operations, and more.">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #1c2128;
+            --bg-card: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #bc8cff;
+            --accent-orange: #d29922;
+            --accent-pink: #f778ba;
+            --gradient-start: #1a1f36;
+            --gradient-end: #0d1117;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--accent-blue); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+        /* Nav */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 0;
+        }
+        nav .container { display: flex; justify-content: space-between; align-items: center; }
+        .nav-logo { font-size: 20px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.5px; }
+        .nav-logo span { color: var(--accent-blue); }
+        .nav-links { display: flex; gap: 32px; list-style: none; }
+        .nav-links a { color: var(--text-secondary); font-size: 14px; font-weight: 500; transition: color 0.2s; }
+        .nav-links a:hover { color: var(--text-primary); text-decoration: none; }
+        .nav-links a.active { color: var(--accent-blue); }
+
+        /* Hero */
+        .roadmap-hero {
+            padding: 140px 0 60px;
+            text-align: center;
+            background: linear-gradient(180deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            position: relative; overflow: hidden;
+        }
+        .roadmap-hero::before {
+            content: "";
+            position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            width: 800px; height: 600px;
+            background: radial-gradient(ellipse at center, rgba(188, 140, 255, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .version-badge {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 8px 20px;
+            border: 1px solid var(--accent-purple);
+            border-radius: 20px;
+            font-size: 13px; font-weight: 600;
+            color: var(--accent-purple);
+            background: rgba(188, 140, 255, 0.08);
+            margin-bottom: 24px;
+        }
+        .version-badge .pulse {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--accent-purple);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.4); }
+        }
+        .roadmap-hero h1 {
+            font-size: 48px; font-weight: 800; line-height: 1.15;
+            margin-bottom: 16px; letter-spacing: -1.5px;
+        }
+        .roadmap-hero h1 .highlight { color: var(--accent-purple); }
+        .roadmap-hero p {
+            font-size: 18px; color: var(--text-secondary);
+            max-width: 620px; margin: 0 auto;
+        }
+
+        /* Timeline */
+        .timeline { padding: 60px 0 80px; }
+        .timeline h2 {
+            font-size: 14px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 1.5px; color: var(--text-muted);
+            margin-bottom: 40px; text-align: center;
+        }
+
+        .phases { display: flex; flex-direction: column; gap: 32px; max-width: 900px; margin: 0 auto; }
+
+        .phase {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            overflow: hidden;
+            transition: border-color 0.3s;
+        }
+        .phase:hover { border-color: var(--text-muted); }
+
+        .phase-header {
+            display: flex; align-items: center; gap: 16px;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: default;
+        }
+        .phase-number {
+            width: 36px; height: 36px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; flex-shrink: 0;
+        }
+        .phase-header h3 { font-size: 17px; font-weight: 600; flex: 1; }
+        .phase-tag {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.8px; padding: 4px 10px; border-radius: 6px;
+        }
+
+        .phase-body { padding: 20px 24px; }
+        .feature-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .feature-list li {
+            display: flex; align-items: flex-start; gap: 12px;
+            font-size: 14px; color: var(--text-secondary); line-height: 1.5;
+        }
+        .feature-list li .icon {
+            flex-shrink: 0; margin-top: 2px; font-size: 16px;
+        }
+        .feature-list li strong { color: var(--text-primary); font-weight: 600; }
+
+        /* Phase colors */
+        .phase-1 .phase-number { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+        .phase-1 .phase-tag { background: rgba(88, 166, 255, 0.12); color: var(--accent-blue); }
+        .phase-2 .phase-number { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+        .phase-2 .phase-tag { background: rgba(63, 185, 80, 0.12); color: var(--accent-green); }
+        .phase-3 .phase-number { background: rgba(210, 153, 34, 0.15); color: var(--accent-orange); }
+        .phase-3 .phase-tag { background: rgba(210, 153, 34, 0.12); color: var(--accent-orange); }
+        .phase-4 .phase-number { background: rgba(188, 140, 255, 0.15); color: var(--accent-purple); }
+        .phase-4 .phase-tag { background: rgba(188, 140, 255, 0.12); color: var(--accent-purple); }
+        .phase-5 .phase-number { background: rgba(247, 120, 186, 0.15); color: var(--accent-pink); }
+        .phase-5 .phase-tag { background: rgba(247, 120, 186, 0.12); color: var(--accent-pink); }
+
+        /* Summary strip */
+        .summary {
+            padding: 60px 0;
+            border-top: 1px solid var(--border-color);
+        }
+        .summary-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+            max-width: 900px; margin: 0 auto;
+        }
+        .summary-card {
+            text-align: center; padding: 28px 16px;
+            border: 1px solid var(--border-color); border-radius: 12px;
+            background: var(--bg-secondary);
+        }
+        .summary-card .num {
+            font-size: 32px; font-weight: 800; letter-spacing: -1px;
+            margin-bottom: 4px;
+        }
+        .summary-card .label { font-size: 13px; color: var(--text-muted); }
+
+        /* CTA */
+        .cta {
+            padding: 60px 0 80px; text-align: center;
+        }
+        .cta p { font-size: 16px; color: var(--text-secondary); margin-bottom: 20px; }
+        .cta-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 12px 28px;
+            border: 1px solid var(--accent-purple);
+            border-radius: 8px;
+            color: var(--accent-purple);
+            font-size: 14px; font-weight: 600;
+            transition: background 0.2s, color 0.2s;
+        }
+        .cta-btn:hover {
+            background: var(--accent-purple); color: #fff; text-decoration: none;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border-color);
+            padding: 24px 0; text-align: center;
+            font-size: 13px; color: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .roadmap-hero h1 { font-size: 32px; }
+            .roadmap-hero p { font-size: 16px; }
+            .summary-grid { grid-template-columns: repeat(2, 1fr); }
+            .phase-header { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="container">
+            <a href="index.html" class="nav-logo" style="text-decoration:none;"><span>gl</span>2gh</a>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#how-it-works">How It Works</a></li>
+                <li><a href="index.html#quickstart">Quick Start</a></li>
+                <li><a href="converter.html">Converter</a></li>
+                <li><a href="docs.html">Docs</a></li>
+                <li><a href="blog.html">Blog</a></li>
+                <li><a href="roadmap.html" class="active">v2.0</a></li>
+                <li><a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="roadmap-hero">
+        <div class="container">
+            <div class="version-badge"><span class="pulse"></span> Coming Soon</div>
+            <h1>What's in <span class="highlight">v2.0</span></h1>
+            <p>Full repository migration. Merge requests to pull requests. Branch renaming. Batch operations. Everything you need for a complete GitLab&nbsp;&rarr;&nbsp;GitHub&nbsp;move.</p>
+        </div>
+    </section>
+
+    <!-- Timeline -->
+    <section class="timeline">
+        <div class="container">
+            <h2>Roadmap</h2>
+            <div class="phases">
+
+                <!-- Phase 1 -->
+                <div class="phase phase-1">
+                    <div class="phase-header">
+                        <div class="phase-number">1</div>
+                        <h3>Foundation</h3>
+                        <span class="phase-tag">Infrastructure</span>
+                    </div>
+                    <div class="phase-body">
+                        <ul class="feature-list">
+                            <li><span class="icon">&#9670;</span><span><strong>GitLab &amp; GitHub API clients</strong> &mdash; authenticated REST clients with custom domain support for self-hosted &amp; Enterprise instances</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Rate limiting &amp; retry</strong> &mdash; exponential backoff respecting platform rate limits</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>In-memory API caching</strong> &mdash; cached user profiles, PR lookups, and search results</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Project configuration model</strong> &mdash; source/target pairs, migration options, state tracking</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Phase 2 -->
+                <div class="phase phase-2">
+                    <div class="phase-header">
+                        <div class="phase-number">2</div>
+                        <h3>Git Repository Migration</h3>
+                        <span class="phase-tag">Core</span>
+                    </div>
+                    <div class="phase-body">
+                        <ul class="feature-list">
+                            <li><span class="icon">&#9670;</span><span><strong>Auto-create GitHub repos</strong> &mdash; private by default via API</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Mirror push</strong> &mdash; full history, all branches and tags</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Branch renaming</strong> &mdash; <code style="color:var(--accent-green);background:rgba(63,185,80,0.1);padding:2px 6px;border-radius:4px;font-size:13px;">master &rarr; main</code> or any custom name</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Trim stale branches</strong> &mdash; clean up branches on GitHub no longer present in GitLab</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Phase 3 -->
+                <div class="phase phase-3">
+                    <div class="phase-header">
+                        <div class="phase-number">3</div>
+                        <h3>Merge Request &rarr; Pull Request</h3>
+                        <span class="phase-tag">Data</span>
+                    </div>
+                    <div class="phase-body">
+                        <ul class="feature-list">
+                            <li><span class="icon">&#9670;</span><span><strong>MR &rarr; PR translation</strong> &mdash; open, closed, and merged merge requests become pull requests</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Comment migration</strong> &mdash; discussions and inline comments with author attribution</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Closed/merged reconstruction</strong> &mdash; temporary branches to faithfully recreate closed PRs</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Age filtering &amp; skip rules</strong> &mdash; migrate only recent MRs, skip broken ones gracefully</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Idempotent re-runs</strong> &mdash; embedded IDs prevent duplicates on repeated runs</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Phase 4 -->
+                <div class="phase phase-4">
+                    <div class="phase-header">
+                        <div class="phase-number">4</div>
+                        <h3>Batch &amp; Scaling</h3>
+                        <span class="phase-tag">Scale</span>
+                    </div>
+                    <div class="phase-body">
+                        <ul class="feature-list">
+                            <li><span class="icon">&#9670;</span><span><strong>CSV project lists</strong> &mdash; define hundreds of source/target pairs in a single file</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Concurrent workers</strong> &mdash; parallel migrations with configurable concurrency</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Loop / daemon mode</strong> &mdash; continuous migration until cancelled</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Rich progress reporting</strong> &mdash; live progress bars and summary tables</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Phase 5 -->
+                <div class="phase phase-5">
+                    <div class="phase-header">
+                        <div class="phase-number">5</div>
+                        <h3>CLI &amp; Polish</h3>
+                        <span class="phase-tag">UX</span>
+                    </div>
+                    <div class="phase-body">
+                        <ul class="feature-list">
+                            <li><span class="icon">&#9670;</span><span><strong><code style="color:var(--accent-pink);background:rgba(247,120,186,0.1);padding:2px 6px;border-radius:4px;font-size:13px;">gl2gh repo-migrate</code></strong> &mdash; single command: clone &rarr; push &rarr; rename &rarr; migrate MRs &rarr; convert CI/CD</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong><code style="color:var(--accent-pink);background:rgba(247,120,186,0.1);padding:2px 6px;border-radius:4px;font-size:13px;">gl2gh batch-migrate</code></strong> &mdash; CSV-driven multi-project orchestration</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Resume support</strong> &mdash; interrupted batch runs pick up where they left off</span></li>
+                            <li><span class="icon">&#9670;</span><span><strong>Web UI &amp; docs updates</strong> &mdash; repo migration form, updated documentation</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+        <div class="container">
+            <p>Want to follow along or contribute?</p>
+            <a href="https://github.com/heisenberg-alt/gitlab-to-gh-actions" class="cta-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                Star on GitHub
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            gl2gh &copy; 2026 &middot; MIT License &middot; Built with Python
+        </div>
+    </footer>
+
+</body>
+</html>
