@@ -121,7 +121,9 @@ class GitLabToGitHubConverter:
         return result
 
     def _workflow_filename(self) -> str:
-        slug = self.workflow_name.lower().replace(" ", "-").replace("/", "-")
+        slug = re.sub(r"[^a-zA-Z0-9_-]", "-", self.workflow_name.lower()).strip("-")
+        if not slug:
+            slug = "ci"
         return f"{slug}.yml"
 
     def _build_workflow(
@@ -395,7 +397,11 @@ class GitLabToGitHubConverter:
         for svc in services:
             svc = normalize_service(svc)
             image = svc.get("image", "")
-            name = svc.get("alias") or image.split("/")[-1].split(":")[0].replace("-", "_")
+            name = (
+                svc.get("alias")
+                or image.split("/")[-1].split(":")[0].replace("-", "_")
+                or "service"
+            )
             # Avoid silently overwriting duplicate service names
             if name in gha_services:
                 name = f"{name}_{len(gha_services)}"

@@ -1,0 +1,7 @@
+{
+  "name": "trigger_pipeline",
+  "description": "Multi-project trigger and downstream pipeline",
+  "workflows": [
+    "ci.yml"
+  ]
+}

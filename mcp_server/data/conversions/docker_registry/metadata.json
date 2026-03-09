@@ -1,0 +1,7 @@
+{
+  "name": "docker_registry",
+  "description": "Docker build with DIND, registry login, multi-tag push",
+  "workflows": [
+    "docker.yml"
+  ]
+}

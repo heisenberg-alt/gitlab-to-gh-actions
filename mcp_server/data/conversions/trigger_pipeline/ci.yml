@@ -1,0 +1,34 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make build
+
+  trigger_deploy:
+    needs: [build]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy service workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.DEPLOY_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: 'team',
+              repo: 'deploy-service',
+              workflow_id: 'deploy.yml',
+              ref: 'main',
+            });
+
+  trigger_docs:
+    needs: [build]
+    uses: ./.github/workflows/docs.yml
+    # NOTE: Child pipeline (include:) maps to reusable workflow (workflow_call)

@@ -1,0 +1,7 @@
+{
+  "name": "environments_advanced",
+  "description": "Environments with protection rules, resource_group, and auto_stop_in",
+  "workflows": [
+    "review.yml"
+  ]
+}

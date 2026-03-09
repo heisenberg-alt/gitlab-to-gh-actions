@@ -1,0 +1,7 @@
+{
+  "name": "python_complex",
+  "description": "Python CI with services (postgres, redis), matrix builds, extends, Docker, SAST, environments",
+  "workflows": [
+    "ci.yml"
+  ]
+}

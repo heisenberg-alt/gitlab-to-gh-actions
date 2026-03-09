@@ -200,7 +200,12 @@ class GitLabCIParser:
         job.rules = list(raw_job.get("rules", []))
 
         extends = raw_job.get("extends", [])
-        job.extends = [extends] if isinstance(extends, str) else list(extends)
+        if isinstance(extends, str):
+            job.extends = [extends]
+        elif isinstance(extends, list):
+            job.extends = list(extends)
+        else:
+            job.extends = []
 
         if "trigger" in raw_job:
             trig = raw_job["trigger"]

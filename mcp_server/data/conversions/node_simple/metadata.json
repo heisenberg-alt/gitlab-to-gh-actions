@@ -1,0 +1,7 @@
+{
+  "name": "node_simple",
+  "description": "Simple Node.js CI with install, test, build, deploy stages",
+  "workflows": [
+    "ci.yml"
+  ]
+}

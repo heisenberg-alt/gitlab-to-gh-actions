@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gl2gh-mcp-server"
+version = "0.1.0"
+description = "MCP Server for GitLab CI RAG — powers accurate GitLab CI to GitHub Actions conversion"
+readme = "../README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+    "chromadb>=0.5.0",
+    "pyyaml>=6.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+indexer = [
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+gl2gh-mcp = "mcp_server.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mcp_server"]

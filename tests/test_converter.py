@@ -209,7 +209,7 @@ deploy_child:
 
         main_wf = list(result.output_workflows.values())[0]
         wf = yaml.safe_load(
-            "\n".join(l for l in main_wf.split("\n") if not l.startswith("#"))
+            "\n".join(line for line in main_wf.split("\n") if not line.startswith("#"))
         )
         deploy_job = wf["jobs"].get("deploy_child")
         assert deploy_job is not None
@@ -236,7 +236,7 @@ test:
         assert result.success
         main_wf = list(result.output_workflows.values())[0]
         wf = yaml.safe_load(
-            "\n".join(l for l in main_wf.split("\n") if not l.startswith("#"))
+            "\n".join(line for line in main_wf.split("\n") if not line.startswith("#"))
         )
         services = wf["jobs"]["test"]["services"]
         assert len(services) == 2

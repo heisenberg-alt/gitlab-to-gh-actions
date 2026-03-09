@@ -1,0 +1,17 @@
+include:
+  - template: Auto-DevOps.gitlab-ci.yml
+
+variables:
+  AUTO_DEVOPS_BUILD_IMAGE_EXTRA_ARGS: "--build-arg NODE_ENV=production"
+  POSTGRES_ENABLED: "true"
+  TEST_DISABLED: "false"
+  CODE_QUALITY_DISABLED: "true"
+  REVIEW_DISABLED: "false"
+  DAST_DISABLED: "true"
+
+test:
+  variables:
+    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/$POSTGRES_DB
+  services:
+    - name: postgres:15
+      alias: postgres

@@ -1,0 +1,41 @@
+stages:
+  - lint
+  - test
+
+lint:frontend:
+  stage: lint
+  image: node:20
+  script:
+    - npm ci
+    - npm run lint
+  rules:
+    - changes:
+        paths:
+          - "src/frontend/**"
+          - "package.json"
+          - "package-lock.json"
+
+lint:backend:
+  stage: lint
+  image: python:3.12
+  script:
+    - pip install ruff
+    - ruff check src/
+  rules:
+    - changes:
+        paths:
+          - "src/backend/**"
+          - "requirements.txt"
+
+test:
+  stage: test
+  image: python:3.12
+  script:
+    - pytest
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "src/**"
+          - "tests/**"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

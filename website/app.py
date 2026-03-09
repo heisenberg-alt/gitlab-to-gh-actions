@@ -18,8 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from gl2gh.converter import GitLabToGitHubConverter
-from gl2gh.parser import GitLabCIParser
+from gl2gh.utils.convert_handler import convert_gitlab_yaml
 
 MAX_PAYLOAD_BYTES = 1_024_000  # 1 MB
 
@@ -60,39 +59,10 @@ def convert() -> object:
     if not data or "content" not in data:
         return jsonify({"success": False, "errors": ["No YAML content provided."]}), 400
 
-    content: str = data["content"]
-    if not content.strip():
-        return jsonify({"success": False, "errors": ["YAML content is empty."]}), 400
-
     try:
-        parser = GitLabCIParser()
-        pipeline = parser.parse_string(content)
-
-        conv = GitLabToGitHubConverter(
-            workflow_name="CI",
-            source_file=".gitlab-ci.yml",
-        )
-        result = conv.convert(pipeline)
-
-        if result.success:
-            return jsonify(
-                {
-                    "success": True,
-                    "workflow": next(iter(result.output_workflows.values()), ""),
-                    "workflows": result.output_workflows,
-                    "warnings": result.warnings,
-                    "notes": result.conversion_notes,
-                }
-            )
-        else:
-            return jsonify(
-                {
-                    "success": False,
-                    "errors": result.errors,
-                    "warnings": result.warnings,
-                }
-            )
-
+        result = convert_gitlab_yaml(data["content"])
+        status = 200 if result["success"] else 400
+        return jsonify(result), status
     except Exception as exc:  # noqa: BLE001
         return jsonify({"success": False, "errors": [str(exc)]}), 500
 

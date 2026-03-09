@@ -1,0 +1,7 @@
+{
+  "name": "pages",
+  "description": "GitLab Pages deployment",
+  "workflows": [
+    "pages.yml"
+  ]
+}

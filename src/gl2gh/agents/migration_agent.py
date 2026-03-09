@@ -8,23 +8,24 @@ import logging
 import os
 from typing import Optional
 
-
-def _run_async(coro):
-    """Run a coroutine, handling the case where an event loop is already running."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    # Already inside an event loop — create a new thread to avoid RuntimeError
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
-
 from pydantic import BaseModel, Field
 
 from gl2gh.converter import GitLabToGitHubConverter
 from gl2gh.models import ConversionResult, GitLabPipeline
+from gl2gh.utils.async_utils import run_async as _run_async
 from gl2gh.utils.yaml_utils import add_yaml_header, validate_yaml_syntax
+
+# RAG support — optional, gracefully degrades if mcp_server is not available
+try:
+    from mcp_server.embeddings import VectorStore, build_index_from_disk
+    from mcp_server.tools.handlers import (
+        PatternSearchTool,
+        ConversionExampleTool,
+        SuggestGitHubActionTool,
+    )
+    _RAG_AVAILABLE = True
+except ImportError:
+    _RAG_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,16 @@ class AddWarningInput(BaseModel):
 
 class AddConversionNoteInput(BaseModel):
     note: str = Field(..., description="Conversion note to add")
+
+
+class SearchPatternInput(BaseModel):
+    snippet: str = Field(..., description="GitLab CI YAML snippet to search for")
+    limit: int = Field(default=3, description="Max results")
+
+
+class GetConversionExampleInput(BaseModel):
+    feature: str = Field(..., description="GitLab CI feature to find examples for")
+    limit: int = Field(default=2, description="Max examples")
 
 
 class MigrationAgent:
@@ -96,10 +107,71 @@ class MigrationAgent:
         self,
         github_token: Optional[str] = None,
         model: str = "gpt-4.1",
+        use_rag: bool = True,
     ) -> None:
         self.github_token = github_token or os.environ.get("GITHUB_TOKEN", "")
         self.model = model
         self._converter = GitLabToGitHubConverter()
+        self._rag_store: Optional[object] = None
+        if use_rag and _RAG_AVAILABLE:
+            try:
+                self._rag_store = build_index_from_disk()
+                logger.info("RAG vector store loaded for migration agent")
+            except Exception as exc:
+                logger.debug("RAG store not available: %s", exc)
+                self._rag_store = None
+
+    def _query_rag_context(self, pipeline_yaml: str) -> str:
+        """Query the RAG corpus for similar patterns and conversion examples."""
+        if not self._rag_store or not _RAG_AVAILABLE:
+            return ""
+
+        context_parts: list[str] = []
+        try:
+            # Find similar patterns
+            pattern_tool = PatternSearchTool(self._rag_store)
+            pattern_results = pattern_tool.run(snippet=pipeline_yaml, limit=3)
+            if pattern_results.get("results"):
+                context_parts.append("## Similar Patterns from Corpus")
+                for r in pattern_results["results"][:2]:
+                    if r.get("content_preview"):
+                        context_parts.append(
+                            f"### Pattern (similarity: {r['similarity']})\n"
+                            f"Patterns: {', '.join(r.get('patterns', []))}\n"
+                            f"```yaml\n{r['content_preview'][:800]}\n```"
+                        )
+
+            # Get conversion examples
+            example_tool = ConversionExampleTool(self._rag_store)
+            patterns = pattern_results.get("query_patterns", [])
+            for pattern in patterns[:2]:
+                examples = example_tool.run(feature=pattern, limit=1)
+                for ex in examples.get("examples", [])[:1]:
+                    if ex.get("gitlab_ci") and ex.get("github_workflows"):
+                        context_parts.append(
+                            f"## Reference Conversion ({pattern})\n"
+                            f"GitLab CI:\n```yaml\n{ex['gitlab_ci'][:600]}\n```\n"
+                        )
+                        for wf_name, wf_content in ex["github_workflows"].items():
+                            context_parts.append(
+                                f"GitHub Actions ({wf_name}):\n"
+                                f"```yaml\n{wf_content[:600]}\n```"
+                            )
+
+            # Suggest actions
+            suggest_tool = SuggestGitHubActionTool(self._rag_store)
+            suggestions = suggest_tool.run(gitlab_snippet=pipeline_yaml)
+            if suggestions.get("suggested_actions"):
+                actions_list = ", ".join(
+                    a["action"] for a in suggestions["suggested_actions"][:5]
+                )
+                context_parts.append(
+                    f"## Recommended GitHub Actions\n{actions_list}"
+                )
+        except Exception as exc:
+            logger.debug("RAG query failed: %s", exc)
+
+        return "\n\n".join(context_parts)
 
     def migrate(
         self,
@@ -223,12 +295,21 @@ class MigrationAgent:
         warns = "\n".join(base_result.warnings) or "none"
         unsup = "\n".join(base_result.unsupported_features) or "none"
 
+        # Query RAG corpus for similar patterns and examples
+        rag_context = self._query_rag_context(summary)
+        rag_section = (
+            f"\n\n## RAG Context (similar patterns from corpus)\n{rag_context}"
+            if rag_context
+            else ""
+        )
+
         user_msg = (
             f"Review and improve this GitLab CI to GitHub Actions migration.\n\n"
             f"## Source Pipeline\n{summary}\n\n"
             f"## Rule-based Output\n```yaml\n{base_wf}\n```\n\n"
             f"## Warnings\n{warns}\n\n"
-            f"## Unsupported\n{unsup}\n\n"
+            f"## Unsupported\n{unsup}"
+            f"{rag_section}\n\n"
             f"Fix issues, handle unsupported features, optimize, "
             f"and save using save_workflow tool."
         )

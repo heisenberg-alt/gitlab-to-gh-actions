@@ -1,0 +1,30 @@
+name: Review App
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: review-${{ github.head_ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy_review:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    environment:
+      name: review/${{ github.head_ref }}
+      url: https://${{ github.head_ref }}.review.example.com
+    steps:
+      - uses: actions/checkout@v4
+      - run: deploy_to_review_app ${{ github.head_ref }}
+
+  # NOTE: auto_stop_in has no direct equivalent.
+  # Use a scheduled workflow or GitHub API to clean up stale environments.
+  stop_review:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    environment:
+      name: review/${{ github.head_ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: teardown_review_app ${{ github.head_ref }}

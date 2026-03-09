@@ -1,0 +1,7 @@
+{
+  "name": "include_templates",
+  "description": "Include remote and local templates with extends",
+  "workflows": [
+    "ci.yml"
+  ]
+}

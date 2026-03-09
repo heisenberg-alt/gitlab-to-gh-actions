@@ -202,7 +202,7 @@ def parse_timeout_minutes(timeout_str: str) -> Optional[int]:
         total_minutes += int(m_match.group(1))
     s_match = re.search(r"(\d+)\s*s(?:ec(?:onds?)?)?", timeout_str)
     if s_match:
-        total_minutes += int(s_match.group(1)) // 60
+        total_minutes += (int(s_match.group(1)) + 59) // 60
 
     if total_minutes == 0:
         try:

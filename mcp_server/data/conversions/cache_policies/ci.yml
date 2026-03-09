@@ -1,0 +1,53 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  install_deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/cache/save@v4
+        with:
+          path: node_modules/
+          key: ${{ github.ref_name }}-${{ hashFiles('package-lock.json') }}
+      - run: npm ci
+
+  build:
+    needs: [install_deps]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules/
+          key: ${{ github.ref_name }}-${{ hashFiles('package-lock.json') }}
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  test:
+    needs: [install_deps]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules/
+          key: ${{ github.ref_name }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            main-node-modules
+      - run: npm test

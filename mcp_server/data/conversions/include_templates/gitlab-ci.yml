@@ -1,0 +1,23 @@
+include:
+  - local: '/ci/base.yml'
+  - project: 'shared-group/ci-templates'
+    file: '/templates/security.yml'
+    ref: v2.0
+  - template: 'Auto-DevOps.gitlab-ci.yml'
+
+stages:
+  - build
+  - test
+  - deploy
+
+build:
+  extends: .build_template
+  stage: build
+  script:
+    - make build
+
+test:
+  extends: .test_template
+  stage: test
+  script:
+    - make test

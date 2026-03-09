@@ -1,0 +1,41 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  GOPATH: $CI_PROJECT_DIR/.go
+  CGO_ENABLED: "0"
+
+.go_base:
+  image: golang:1.22
+  before_script:
+    - mkdir -p .go
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .go/pkg/mod/
+
+build:
+  extends: .go_base
+  stage: build
+  script:
+    - go build -o bin/app ./cmd/server
+  artifacts:
+    paths:
+      - bin/
+
+test:
+  extends: .go_base
+  stage: test
+  services:
+    - name: postgres:16
+      alias: db
+  variables:
+    DB_HOST: db
+  script:
+    - go test -race -coverprofile=coverage.out ./...
+  artifacts:
+    reports:
+      junit: report.xml
+  coverage: '/coverage: \d+\.\d+% of statements/'

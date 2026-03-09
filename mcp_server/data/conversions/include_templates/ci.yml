@@ -1,0 +1,36 @@
+# NOTE: GitLab 'include' with templates has no direct equivalent.
+# Options:
+#   1. Inline the template content into this workflow
+#   2. Use reusable workflows (workflow_call) for shared logic
+#   3. Use composite actions for shared step sequences
+#
+# include:local -> inline or local reusable workflow
+# include:project -> uses: org/repo/.github/workflows/file.yml@ref
+# include:template -> use equivalent starter workflow or action
+
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    # If shared-group/ci-templates has a reusable workflow:
+    # uses: shared-group/ci-templates/.github/workflows/security.yml@v2.0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make build
+
+  test:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
+
+  # Security scanning (was: include:template Auto-DevOps)
+  security:
+    needs: [build]
+    uses: shared-group/ci-templates/.github/workflows/security.yml@v2.0

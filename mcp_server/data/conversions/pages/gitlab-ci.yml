@@ -1,0 +1,23 @@
+stages:
+  - build
+  - deploy
+
+build_site:
+  stage: build
+  image: node:20
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - public/
+
+pages:
+  stage: deploy
+  script:
+    - echo "Deploying to GitLab Pages"
+  artifacts:
+    paths:
+      - public/
+  only:
+    - main

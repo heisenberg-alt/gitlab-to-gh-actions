@@ -24,6 +24,11 @@ from gl2gh.utils.yaml_utils import validate_yaml_syntax
 console = Console()
 load_dotenv()
 
+# Subprocess timeout constants (seconds)
+_GH_TIMEOUT_QUICK = 10   # Simple version checks
+_GH_TIMEOUT_API = 15     # API queries (workflow list, copilot status)
+_GH_TIMEOUT_CREATE = 30  # Repo creation
+
 
 def print_banner() -> None:
     console.print(
@@ -71,7 +76,12 @@ def print_result(result: ConversionResult, verbose: bool = False) -> None:
 def _check_gh_cli() -> bool:
     """Check if gh CLI is installed."""
     try:
-        subprocess.run(["gh", "--version"], capture_output=True, check=True, timeout=10)
+        subprocess.run(
+            ["gh", "--version"],
+            capture_output=True,
+            check=True,
+            timeout=_GH_TIMEOUT_QUICK,
+        )
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
@@ -85,7 +95,13 @@ def _gh_create_repo(name: str, private: bool = False) -> bool:
     else:
         cmd.append("--public")
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=30)
+        subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=_GH_TIMEOUT_CREATE,
+        )
         return True
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         console.print(f"[red]gh repo create failed: {e.stderr}[/red]")
@@ -100,7 +116,7 @@ def _gh_workflow_list() -> list[str]:
             capture_output=True,
             text=True,
             check=True,
-            timeout=15,
+            timeout=_GH_TIMEOUT_API,
         )
         workflows = json.loads(result.stdout)
         return [w["name"] for w in workflows]
@@ -139,7 +155,10 @@ def main() -> None:
 @click.option(
     "--format", "output_format", type=click.Choice(["yaml", "json"]), default="yaml"
 )
-def migrate(input_file, output_dir, name, ai, pure_rules, model, dry_run, verbose, output_format):
+def migrate(
+    input_file, output_dir, name, ai, pure_rules,
+    model, dry_run, verbose, output_format,
+):
     """Migrate a GitLab CI pipeline to GitHub Actions."""
     print_banner()
     console.print(f"\n[dim]Reading:[/dim] [cyan]{input_file}[/cyan]")
@@ -187,8 +206,15 @@ def migrate(input_file, output_dir, name, ai, pure_rules, model, dry_run, verbos
     # Show optimization score when available
     if result.optimization_score is not None:
         score = result.optimization_score
-        color = "green" if score >= 70 else "yellow" if score >= 50 else "red"
-        console.print(f"\n[bold]Workflow quality score:[/bold] [{color}]{score}/100[/{color}]")
+        color = (
+            "green" if score >= 70
+            else "yellow" if score >= 50
+            else "red"
+        )
+        console.print(
+            f"\n[bold]Workflow quality score:[/bold]"
+            f" [{color}]{score}/100[/{color}]"
+        )
 
     if not result.success:
         sys.exit(1)

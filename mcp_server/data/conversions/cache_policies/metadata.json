@@ -1,0 +1,7 @@
+{
+  "name": "cache_policies",
+  "description": "Advanced caching with pull/push policies and fallback keys",
+  "workflows": [
+    "ci.yml"
+  ]
+}

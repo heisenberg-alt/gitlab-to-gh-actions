@@ -9,18 +9,9 @@ from typing import Any, Optional
 
 import yaml
 
+from gl2gh.utils.async_utils import run_async as _run_async
+
 logger = logging.getLogger(__name__)
-
-
-def _run_async(coro):
-    """Run a coroutine, handling the case where an event loop is already running."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
 
 
 @dataclass
@@ -217,4 +208,3 @@ class OptimizerAgent:
                         ),
                     )
                 )
-                break

@@ -1,0 +1,7 @@
+{
+  "name": "parallel_matrix",
+  "description": "Parallel matrix builds with multiple variables and allow_failure",
+  "workflows": [
+    "test.yml"
+  ]
+}

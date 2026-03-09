@@ -1,0 +1,7 @@
+{
+  "name": "rules_changes",
+  "description": "Rules with changes/paths filtering and multiple conditions",
+  "workflows": [
+    "lint.yml"
+  ]
+}

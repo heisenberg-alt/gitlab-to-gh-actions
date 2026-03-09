@@ -1,0 +1,14 @@
+{
+  "mcp": {
+    "servers": {
+      "gl2gh-gitlab-ci-rag": {
+        "command": "python",
+        "args": ["-m", "mcp_server"],
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      }
+    }
+  }
+}
