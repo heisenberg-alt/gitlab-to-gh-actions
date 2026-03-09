@@ -91,7 +91,7 @@ jobs:
         assert any(i.severity == "info" and "non-standard" in i.message for i in issues)
 
     def test_reusable_workflow_caller_no_false_positive(self):
-        """Jobs with only 'uses:' (reusable workflow callers) should not flag missing runs-on/steps."""
+        """Reusable workflow callers should not flag missing runs-on/steps."""
         content = """\
 name: CI
 on: push

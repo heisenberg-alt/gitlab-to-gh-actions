@@ -395,7 +395,10 @@ class GitLabToGitHubConverter:
         for svc in services:
             svc = normalize_service(svc)
             image = svc.get("image", "")
-            name = svc.get("alias") or image.split("/")[-1].split(":")[0].replace("-", "_")
+            name = (
+                svc.get("alias")
+                or image.split("/")[-1].split(":")[0].replace("-", "_")
+            )
             # Avoid silently overwriting duplicate service names
             if name in gha_services:
                 name = f"{name}_{len(gha_services)}"

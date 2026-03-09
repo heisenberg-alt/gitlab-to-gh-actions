@@ -235,11 +235,11 @@ def parse_expire_in_days(expire_in: str) -> int:
     value = int(match.group(1))
     unit = match.group(2).lower()
     if unit == "second":
-        return max(1, -(-value // 86400))  # ceiling division
+        return max(1, (value + 86399) // 86400)
     elif unit == "minute":
-        return max(1, -(-value // 1440))  # ceiling division
+        return max(1, (value + 1439) // 1440)
     elif unit == "hour":
-        return max(1, -(-value // 24))  # ceiling division
+        return max(1, (value + 23) // 24)
     elif unit == "day":
         return value
     elif unit == "week":

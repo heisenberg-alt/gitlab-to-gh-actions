@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def _run_async(coro):
     """Run a coroutine, handling the case where an event loop is already running."""
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
     import concurrent.futures

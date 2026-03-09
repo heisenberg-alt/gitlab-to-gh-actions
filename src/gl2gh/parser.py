@@ -146,7 +146,8 @@ class GitLabCIParser:
             raw_job.get("after_script", pipeline.default_after_script)
         )
 
-        job.variables = self._parse_variables(raw_job.get("variables", {}))
+        if "variables" in raw_job:
+            job.variables = self._parse_variables(raw_job["variables"])
 
         if "artifacts" in raw_job:
             job.artifacts = self._parse_artifacts(raw_job["artifacts"])
@@ -231,9 +232,7 @@ class GitLabCIParser:
             job.before_script = template.before_script
         if not job.after_script and template.after_script:
             job.after_script = template.after_script
-        if not job.variables:
-            job.variables = dict(template.variables)
-        else:
+        if template.variables:
             merged = dict(template.variables)
             merged.update(job.variables)
             job.variables = merged
@@ -272,11 +271,19 @@ class GitLabCIParser:
             result = {}
             for k, v in raw.items():
                 if isinstance(v, dict):
-                    result[str(k)] = str(v.get("value", ""))
+                    result[str(k)] = self._var_to_str(v.get("value", ""))
                 else:
-                    result[str(k)] = str(v) if v is not None else ""
+                    result[str(k)] = self._var_to_str(v)
             return result
         return {}
+
+    @staticmethod
+    def _var_to_str(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return str(value).lower()
+        return str(value)
 
     def _parse_services(self, raw: Any) -> list[dict[str, Any]]:
         if not raw:
