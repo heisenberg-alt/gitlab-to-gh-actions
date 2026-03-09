@@ -139,7 +139,10 @@ def main() -> None:
 @click.option(
     "--format", "output_format", type=click.Choice(["yaml", "json"]), default="yaml"
 )
-def migrate(input_file, output_dir, name, ai, pure_rules, model, dry_run, verbose, output_format):
+def migrate(
+    input_file, output_dir, name, ai, pure_rules,
+    model, dry_run, verbose, output_format,
+):
     """Migrate a GitLab CI pipeline to GitHub Actions."""
     print_banner()
     console.print(f"\n[dim]Reading:[/dim] [cyan]{input_file}[/cyan]")
@@ -188,7 +191,10 @@ def migrate(input_file, output_dir, name, ai, pure_rules, model, dry_run, verbos
     if result.optimization_score is not None:
         score = result.optimization_score
         color = "green" if score >= 70 else "yellow" if score >= 50 else "red"
-        console.print(f"\n[bold]Workflow quality score:[/bold] [{color}]{score}/100[/{color}]")
+        console.print(
+            f"\n[bold]Workflow quality score:[/bold]"
+            f" [{color}]{score}/100[/{color}]"
+        )
 
     if not result.success:
         sys.exit(1)
@@ -207,10 +213,16 @@ def migrate(input_file, output_dir, name, ai, pure_rules, model, dry_run, verbos
         return
 
     out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
-    for filename, content in result.output_workflows.items():
-        (out_path / filename).write_text(content, encoding="utf-8")
-        console.print(f"[green]Written:[/green] {out_path / filename}")
+    try:
+        out_path.mkdir(parents=True, exist_ok=True)
+        for filename, content in result.output_workflows.items():
+            (out_path / filename).write_text(content, encoding="utf-8")
+            console.print(f"[green]Written:[/green] {out_path / filename}")
+    except OSError as exc:
+        console.print(
+            f"[bold red]Failed to write output files: {exc}[/bold red]"
+        )
+        sys.exit(1)
 
     console.print("\n[bold green]Done![/bold green] Next steps:")
     console.print(f"  gl2gh validate {output_dir}")

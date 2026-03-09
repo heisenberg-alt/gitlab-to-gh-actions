@@ -12,7 +12,7 @@ from typing import Optional
 def _run_async(coro):
     """Run a coroutine, handling the case where an event loop is already running."""
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
     # Already inside an event loop — create a new thread to avoid RuntimeError
@@ -20,11 +20,11 @@ def _run_async(coro):
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(asyncio.run, coro).result()
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field  # noqa: E402
 
-from gl2gh.converter import GitLabToGitHubConverter
-from gl2gh.models import ConversionResult, GitLabPipeline
-from gl2gh.utils.yaml_utils import add_yaml_header, validate_yaml_syntax
+from gl2gh.converter import GitLabToGitHubConverter  # noqa: E402
+from gl2gh.models import ConversionResult, GitLabPipeline  # noqa: E402
+from gl2gh.utils.yaml_utils import add_yaml_header, validate_yaml_syntax  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

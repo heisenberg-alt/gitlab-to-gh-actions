@@ -4,6 +4,7 @@ Comprehensive mapping rules from GitLab CI to GitHub Actions.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Optional
 
@@ -235,11 +236,11 @@ def parse_expire_in_days(expire_in: str) -> int:
     value = int(match.group(1))
     unit = match.group(2).lower()
     if unit == "second":
-        return max(1, -(-value // 86400))  # ceiling division
+        return max(1, math.ceil(value / 86400))
     elif unit == "minute":
-        return max(1, -(-value // 1440))  # ceiling division
+        return max(1, math.ceil(value / 1440))
     elif unit == "hour":
-        return max(1, -(-value // 24))  # ceiling division
+        return max(1, math.ceil(value / 24))
     elif unit == "day":
         return value
     elif unit == "week":

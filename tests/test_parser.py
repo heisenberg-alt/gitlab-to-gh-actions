@@ -155,3 +155,71 @@ job1:
         job = pipeline.jobs["job1"]
         assert len(job.rules) == 1
         assert "$CI_COMMIT_TAG" in job.rules[0]["if"]
+
+    def test_parse_boolean_variable(self):
+        """YAML boolean values should be lowercased in parsed variables."""
+        content = """\
+variables:
+  ENABLED: true
+  DISABLED: false
+
+job1:
+  script:
+    - echo hi
+  variables:
+    DEBUG: true
+"""
+        pipeline = self.parser.parse_string(content)
+        assert pipeline.variables["ENABLED"] == "true"
+        assert pipeline.variables["DISABLED"] == "false"
+        assert pipeline.jobs["job1"].variables["DEBUG"] == "true"
+
+    def test_parse_null_variable(self):
+        """Null variable values should become empty strings."""
+        content = """\
+job1:
+  script:
+    - echo hi
+  variables:
+    EMPTY_VAR:
+"""
+        pipeline = self.parser.parse_string(content)
+        assert pipeline.jobs["job1"].variables["EMPTY_VAR"] == ""
+
+    def test_extends_merges_variables(self):
+        """Template variables should be merged with job variables."""
+        content = """\
+.base:
+  variables:
+    FROM_TEMPLATE: template_val
+    SHARED: base
+
+job1:
+  extends: .base
+  script:
+    - echo hi
+  variables:
+    OWN_VAR: own_val
+    SHARED: override
+"""
+        pipeline = self.parser.parse_string(content)
+        job = pipeline.jobs["job1"]
+        assert job.variables["FROM_TEMPLATE"] == "template_val"
+        assert job.variables["OWN_VAR"] == "own_val"
+        assert job.variables["SHARED"] == "override"
+
+    def test_extends_inherits_variables_when_job_has_none(self):
+        """Job without variables should inherit all template variables."""
+        content = """\
+.base:
+  variables:
+    FROM_TEMPLATE: template_val
+
+job1:
+  extends: .base
+  script:
+    - echo hi
+"""
+        pipeline = self.parser.parse_string(content)
+        job = pipeline.jobs["job1"]
+        assert job.variables["FROM_TEMPLATE"] == "template_val"
