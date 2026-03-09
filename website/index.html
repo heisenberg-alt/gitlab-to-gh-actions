@@ -777,7 +777,7 @@
                     <span class="code-title">Terminal</span>
                 </div>
                 <pre><span class="comment"># Install gl2gh</span>
-<span class="command">pip install</span> <span class="flag">-e</span> <span class="arg">".[dev]"</span>
+<span class="command">uv sync</span> <span class="flag">--all-extras</span>
 
 <span class="comment"># Inspect your pipeline</span>
 <span class="command">gl2gh inspect</span> <span class="arg">.gitlab-ci.yml</span> <span class="flag">-v</span>
