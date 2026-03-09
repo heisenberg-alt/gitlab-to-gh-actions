@@ -128,7 +128,9 @@ class GitLabCIIndexer:
         logger.info("Crawled %d GitLab CI files", len(collected))
         return collected
 
-    def _fetch_gitlab_ci_file(self, project: dict[str, Any]) -> Optional[dict[str, Any]]:
+    def _fetch_gitlab_ci_file(
+        self, project: dict[str, Any],
+    ) -> Optional[dict[str, Any]]:
         """Fetch the .gitlab-ci.yml content for a single GitLab project."""
         pid = project["id"]
         name = project.get("path_with_namespace", f"project-{pid}")

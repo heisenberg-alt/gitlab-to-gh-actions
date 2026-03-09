@@ -58,6 +58,9 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 
+[tool.ruff.lint.per-file-ignores]
+"mcp_server/seed_data.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true

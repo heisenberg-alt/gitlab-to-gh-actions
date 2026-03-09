@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gl2gh-mcp-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP Server for GitLab CI RAG — powers accurate GitLab CI to GitHub Actions conversion"
 readme = "../README.md"
 license = "MIT"

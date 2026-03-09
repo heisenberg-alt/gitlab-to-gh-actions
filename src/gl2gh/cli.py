@@ -401,5 +401,130 @@ def gh_status():
         console.print("  Install: brew install gh")
 
 
+@main.command("rag-status")
+def rag_status():
+    """Check MCP RAG server and vector store status."""
+    print_banner()
+    try:
+        from mcp_server.embeddings import build_index_from_disk
+        store = build_index_from_disk()
+        stats = store.stats()
+        console.print("[green]RAG vector store:[/green] available")
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column(style="dim")
+        table.add_column()
+        table.add_row(
+            "Documents indexed",
+            str(stats.get("total_documents", 0)),
+        )
+        table.add_row(
+            "Collection",
+            stats.get("collection", "—"),
+        )
+        table.add_row(
+            "Storage",
+            stats.get("storage_path", "—"),
+        )
+        console.print(table)
+    except ImportError:
+        console.print(
+            "[red]RAG not available:[/red] "
+            "install with pip install chromadb"
+        )
+    except Exception as exc:
+        console.print(f"[red]RAG error:[/red] {exc}")
+
+
+@main.command("index")
+@click.argument("source", required=False)
+@click.option(
+    "--gitlab", is_flag=True,
+    help="Crawl public GitLab projects for CI configs.",
+)
+@click.option(
+    "--github", is_flag=True,
+    help="Search GitHub for repos migrated from GitLab.",
+)
+@click.option(
+    "--max-pages", default=5, show_default=True,
+    help="Max API pages to crawl.",
+)
+@click.option(
+    "--min-stars", default=50, show_default=True,
+    help="Minimum star count for GitLab projects.",
+)
+def index_cmd(source, gitlab, github, max_pages, min_stars):
+    """Index GitLab CI files into the RAG corpus.
+
+    SOURCE is an optional local directory to scan for .gitlab-ci.yml files.
+    Use --gitlab / --github to crawl public APIs.
+    """
+    print_banner()
+    try:
+        from mcp_server.embeddings import build_index_from_disk
+        from mcp_server.indexer import GitLabCIIndexer
+    except ImportError:
+        console.print(
+            "[red]MCP server not installed.[/red] "
+            "Run: pip install -e mcp_server/"
+        )
+        sys.exit(1)
+
+    indexer = GitLabCIIndexer()
+    total = 0
+
+    if source:
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task("Indexing local files...", total=None)
+            entries = indexer.index_local_files(source)
+            total += len(entries)
+        console.print(
+            f"[green]Indexed {len(entries)} local file(s)[/green]"
+        )
+
+    if gitlab:
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task("Crawling GitLab...", total=None)
+            entries = indexer.crawl_gitlab_projects(
+                min_stars=min_stars, max_pages=max_pages,
+            )
+            total += len(entries)
+        console.print(
+            f"[green]Indexed {len(entries)} GitLab project(s)[/green]"
+        )
+
+    if github:
+        with Progress(
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task("Searching GitHub...", total=None)
+            entries = indexer.crawl_github_migrated_repos(
+                max_results=max_pages * 10,
+            )
+            total += len(entries)
+        console.print(
+            f"[green]Found {len(entries)} GitHub migration pair(s)[/green]"
+        )
+
+    if not source and not gitlab and not github:
+        console.print("[yellow]Re-indexing seed data...[/yellow]")
+        store = build_index_from_disk()
+        stats = store.stats()
+        total = stats.get("total_documents", 0)
+
+    indexer.save_index()
+    console.print(
+        f"\n[bold green]Indexing complete.[/bold green] "
+        f"Total: {total} document(s)"
+    )
+
+
 if __name__ == "__main__":
     main()

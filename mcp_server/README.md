@@ -1,6 +1,6 @@
-# gl2gh MCP Server — GitLab CI RAG
+# gl2gh MCP Server — GitLab CI RAG (v0.2.0)
 
-An MCP (Model Context Protocol) server that provides **Retrieval-Augmented Generation** for converting GitLab CI/CD pipelines to GitHub Actions. It indexes real-world GitLab CI files and curated conversion pairs, then exposes semantic search tools that AI agents can use for more accurate conversions.
+An MCP (Model Context Protocol) server providing **Retrieval-Augmented Generation** for converting GitLab CI/CD pipelines to GitHub Actions. Indexes real-world GitLab CI files and curated conversion pairs, then exposes semantic search tools for more accurate conversions.
 
 ## Architecture
 
@@ -11,6 +11,9 @@ An MCP (Model Context Protocol) server that provides **Retrieval-Augmented Gener
 │  with MCP support │     │  - conversion_examples   │     │  (embedded)     │
 │                   │     │  - validate_corpus       │     └─────────────────┘
 │                   │     │  - suggest_action        │
+│                   │     │  - confidence_score  NEW │
+│                   │     │  - workflow_split    NEW │
+│                   │     │  - record_feedback   NEW │
 └──────────────────┘     └──────────────────────────┘
                                     │
                                     ▼
@@ -19,90 +22,58 @@ An MCP (Model Context Protocol) server that provides **Retrieval-Augmented Gener
                           │  - GitLab CI YAMLs│
                           │  - Conversion pairs│
                           │  - Pattern metadata│
+                          │  - User feedback   │
                           └──────────────────┘
 ```
 
-## Tools Exposed
+## Tools (8 total)
 
 | Tool | Description |
 |------|-------------|
-| `find_similar_gitlab_pattern` | Search the corpus for GitLab CI patterns similar to a YAML snippet |
-| `get_conversion_example` | Retrieve real before/after conversion examples for a GitLab CI feature |
-| `validate_against_corpus` | Validate a conversion output against known patterns; returns confidence + warnings |
-| `suggest_github_action` | Suggest GitHub Actions marketplace actions for a GitLab CI job type |
-| `index_stats` | Return stats about the indexed corpus |
+| `find_similar_gitlab_pattern` | Search corpus for similar GitLab CI YAML snippets |
+| `get_conversion_example` | Retrieve real before/after conversion examples |
+| `validate_against_corpus` | Validate conversion output; confidence + warnings |
+| `suggest_github_action` | Suggest Actions marketplace actions for a job type |
+| `index_stats` | Corpus statistics |
+| **`confidence_score`** | Score each job 0.0–1.0 on conversion confidence |
+| **`suggest_workflow_split`** | Recommend splitting large pipelines into multiple files |
+| **`record_feedback`** | Record user corrections for RAG improvement |
 
 ## Quick Start
 
-### 1. Install dependencies
-
 ```bash
-cd mcp_server
-pip install -e ".[dev]"
-```
+# Install
+cd mcp_server && pip install -e ".[dev]"
 
-### 2. Seed the data
-
-Populate the corpus with curated conversion pairs and example GitLab CI files:
-
-```bash
+# Seed curated data
 python -m mcp_server.seed_data
-```
 
-### 3. Build the vector index
-
-```bash
-python -c "from mcp_server.embeddings import build_index_from_disk; build_index_from_disk()"
-```
-
-### 4. Run the MCP server
-
-```bash
+# Run the server
 python -m mcp_server
 ```
 
-### 5. (Optional) Crawl more data
-
-Fetch GitLab CI files from public GitLab projects:
+## CLI Integration
 
 ```bash
-python -c "
-from mcp_server.indexer import GitLabCIIndexer
-idx = GitLabCIIndexer()
-idx.crawl_gitlab_projects(min_stars=100, max_pages=5)
-idx.save_index()
-"
+gl2gh rag-status          # Check RAG store health
+gl2gh index               # Re-index seed data
+gl2gh index /path/to/dir  # Index local .gitlab-ci.yml files
+gl2gh index --gitlab      # Crawl public GitLab projects
+gl2gh index --github      # Find GitHub migration pairs
 ```
 
 ## VS Code Configuration
 
-Add to your VS Code `settings.json`:
+Add to `.vscode/mcp.json`:
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "gl2gh-gitlab-ci-rag": {
-        "command": "python",
-        "args": ["-m", "mcp_server"],
-        "cwd": "/path/to/gitlab-to-gh-actions"
-      }
-    }
-  }
-}
-```
-
-## Claude Desktop Configuration
-
-Add to `~/.config/claude/claude_desktop_config.json` (Linux/Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "gl2gh-gitlab-ci-rag": {
+  "servers": {
+    "gl2gh-rag": {
+      "type": "stdio",
       "command": "python",
       "args": ["-m", "mcp_server"],
-      "cwd": "/path/to/gitlab-to-gh-actions"
+      "cwd": "${workspaceFolder}"
     }
   }
 }
@@ -110,20 +81,8 @@ Add to `~/.config/claude/claude_desktop_config.json` (Linux/Mac) or `%APPDATA%\C
 
 ## Data Sources
 
-The corpus can be populated from multiple sources:
-
-1. **Curated conversion pairs** (included) — 10 hand-verified before/after examples covering common patterns
-2. **GitLab.com API** — Crawl public projects for `.gitlab-ci.yml` files
-3. **GitHub API** — Find repos that migrated from GitLab (have both `.gitlab-ci.yml` and `.github/workflows/`)
+1. **Curated pairs** (included) — 10 verified before/after examples
+2. **GitLab.com API** — Crawl public projects
+3. **GitHub API** — Find repos migrated from GitLab
 4. **Local files** — Index your own `.gitlab-ci.yml` files
-
-## Integration with gl2gh
-
-The MCP server is designed to work alongside the `gl2gh` migration agent. When the agent encounters a complex GitLab CI pattern, it can query the MCP server for:
-
-- Similar patterns from real projects
-- Reference conversion examples
-- Validation of its generated output
-- Recommended GitHub Actions to use
-
-This RAG approach grounds the AI's output in real-world examples, significantly improving conversion accuracy for complex pipelines.
+5. **User feedback** — Corrections recorded via `record_feedback` tool

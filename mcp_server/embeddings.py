@@ -6,9 +6,7 @@ Falls back to a simple TF-IDF approach if sentence-transformers is unavailable.
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -112,12 +110,16 @@ def yaml_to_text_description(content: str) -> str:
     if "stages" in data:
         parts.append(f"stages: {', '.join(data['stages'])}")
     if "variables" in data:
-        var_keys = list(data["variables"].keys()) if isinstance(data["variables"], dict) else []
+        var_keys = (
+            list(data["variables"].keys())
+            if isinstance(data["variables"], dict)
+            else []
+        )
         parts.append(f"global variables: {', '.join(var_keys[:10])}")
     if "include" in data:
-        parts.append(f"includes external templates")
+        parts.append("includes external templates")
     if "default" in data:
-        parts.append(f"has default configuration")
+        parts.append("has default configuration")
 
     # Jobs
     global_keys = {
@@ -131,21 +133,33 @@ def yaml_to_text_description(content: str) -> str:
         if "stage" in value:
             job_desc.append(f"in stage '{value['stage']}'")
         if "image" in value:
-            img = value["image"] if isinstance(value["image"], str) else value["image"].get("name", "")
+            img = (
+                value["image"]
+                if isinstance(value["image"], str)
+                else value["image"].get("name", "")
+            )
             job_desc.append(f"using image {img}")
         if "services" in value:
             job_desc.append("with services")
         if "rules" in value:
             job_desc.append("with conditional rules")
         if "extends" in value:
-            extends = value["extends"] if isinstance(value["extends"], list) else [value["extends"]]
+            extends = (
+                value["extends"]
+                if isinstance(value["extends"], list)
+                else [value["extends"]]
+            )
             job_desc.append(f"extending {', '.join(extends)}")
         if "cache" in value:
             job_desc.append("with caching")
         if "artifacts" in value:
             job_desc.append("producing artifacts")
         if "environment" in value:
-            env_name = value["environment"] if isinstance(value["environment"], str) else value["environment"].get("name", "")
+            env_name = (
+                value["environment"]
+                if isinstance(value["environment"], str)
+                else value["environment"].get("name", "")
+            )
             job_desc.append(f"deploying to {env_name}")
         if "parallel" in value:
             job_desc.append("with parallel execution")
@@ -244,9 +258,22 @@ class VectorStore:
                 wf_data = yaml.safe_load(wf_content)
                 if isinstance(wf_data, dict):
                     if "on" in wf_data:
-                        gh_summary_parts.append(f"triggers: {list(wf_data['on'].keys()) if isinstance(wf_data['on'], dict) else wf_data['on']}")
+                        on_val = wf_data["on"]
+                        triggers = (
+                            list(on_val.keys())
+                            if isinstance(on_val, dict)
+                            else on_val
+                        )
+                        gh_summary_parts.append(
+                            f"triggers: {triggers}"
+                        )
                     if "jobs" in wf_data:
-                        gh_summary_parts.append(f"jobs: {list(wf_data['jobs'].keys())}")
+                        job_keys = list(
+                            wf_data["jobs"].keys()
+                        )
+                        gh_summary_parts.append(
+                            f"jobs: {job_keys}"
+                        )
             except yaml.YAMLError:
                 pass
 
@@ -299,9 +326,21 @@ class VectorStore:
         for i, doc_id in enumerate(results["ids"][0]):
             match = {
                 "id": doc_id,
-                "description": results["documents"][0][i] if results["documents"] else "",
-                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                "distance": results["distances"][0][i] if results["distances"] else 1.0,
+                "description": (
+                    results["documents"][0][i]
+                    if results["documents"]
+                    else ""
+                ),
+                "metadata": (
+                    results["metadatas"][0][i]
+                    if results["metadatas"]
+                    else {}
+                ),
+                "distance": (
+                    results["distances"][0][i]
+                    if results["distances"]
+                    else 1.0
+                ),
             }
             matches.append(match)
 
@@ -349,9 +388,21 @@ class VectorStore:
 
             matches.append({
                 "id": doc_id,
-                "description": results["documents"][0][i] if results["documents"] else "",
-                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                "distance": results["distances"][0][i] if results["distances"] else 1.0,
+                "description": (
+                    results["documents"][0][i]
+                    if results["documents"]
+                    else ""
+                ),
+                "metadata": (
+                    results["metadatas"][0][i]
+                    if results["metadatas"]
+                    else {}
+                ),
+                "distance": (
+                    results["distances"][0][i]
+                    if results["distances"]
+                    else 1.0
+                ),
                 "gitlab_ci": gitlab_content,
                 "github_workflows": github_workflows,
             })

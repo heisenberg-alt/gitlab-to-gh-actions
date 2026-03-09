@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -31,9 +30,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp_server.embeddings import VectorStore, build_index_from_disk
 from mcp_server.tools.handlers import (
+    ConfidenceScoreTool,
     ConversionExampleTool,
     PatternSearchTool,
+    RecordFeedbackTool,
     SuggestGitHubActionTool,
+    SuggestWorkflowSplitTool,
     ValidateAgainstCorpusTool,
 )
 
@@ -75,7 +77,10 @@ TOOLS = [
             "properties": {
                 "snippet": {
                     "type": "string",
-                    "description": "A GitLab CI YAML snippet (a job definition, rule block, etc.)",
+                    "description": (
+                        "A GitLab CI YAML snippet"
+                        " (a job definition, rule block, etc.)"
+                    ),
                 },
                 "limit": {
                     "type": "integer",
@@ -84,7 +89,12 @@ TOOLS = [
                 },
                 "pattern_filter": {
                     "type": "string",
-                    "description": "Optional: filter results to those containing this pattern (e.g., 'docker_build', 'services', 'rules')",
+                    "description": (
+                        "Optional: filter results to those"
+                        " containing this pattern"
+                        " (e.g., 'docker_build', 'services',"
+                        " 'rules')"
+                    ),
                 },
             },
             "required": ["snippet"],
@@ -103,7 +113,13 @@ TOOLS = [
             "properties": {
                 "feature": {
                     "type": "string",
-                    "description": "The GitLab CI feature to find examples for (e.g., 'rules:if', 'services', 'cache', 'parallel:matrix', 'extends', 'include')",
+                    "description": (
+                        "The GitLab CI feature to find"
+                        " examples for (e.g., 'rules:if',"
+                        " 'services', 'cache',"
+                        " 'parallel:matrix', 'extends',"
+                        " 'include')"
+                    ),
                 },
                 "limit": {
                     "type": "integer",
@@ -168,6 +184,82 @@ TOOLS = [
             "properties": {},
         },
     ),
+    Tool(
+        name="confidence_score",
+        description=(
+            "Score individual jobs in a GitLab-to-GitHub conversion on "
+            "conversion confidence. Each job gets a 0.0-1.0 confidence "
+            "score based on feature complexity and corpus similarity. "
+            "Use this after generating a workflow to flag low-confidence "
+            "jobs that need manual review."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "gitlab_ci": {
+                    "type": "string",
+                    "description": "The original GitLab CI YAML",
+                },
+                "github_actions": {
+                    "type": "string",
+                    "description": "The generated GitHub Actions YAML",
+                },
+            },
+            "required": ["gitlab_ci", "github_actions"],
+        },
+    ),
+    Tool(
+        name="suggest_workflow_split",
+        description=(
+            "Analyze a large GitLab CI pipeline and recommend how to "
+            "split it into multiple GitHub Actions workflow files "
+            "(e.g., ci.yml, deploy.yml, security.yml). Categorises "
+            "jobs by stage/name and suggests trigger strategies."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "gitlab_ci": {
+                    "type": "string",
+                    "description": "The GitLab CI YAML to analyze",
+                },
+            },
+            "required": ["gitlab_ci"],
+        },
+    ),
+    Tool(
+        name="record_feedback",
+        description=(
+            "Record a user correction to a conversion. Stores the "
+            "original GitLab CI, the tool's output, and the user's "
+            "corrected version. This data improves future RAG results."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "gitlab_ci": {
+                    "type": "string",
+                    "description": "Original GitLab CI YAML",
+                },
+                "original_output": {
+                    "type": "string",
+                    "description": "The originally generated GitHub Actions YAML",
+                },
+                "corrected_output": {
+                    "type": "string",
+                    "description": "The user-corrected GitHub Actions YAML",
+                },
+                "notes": {
+                    "type": "string",
+                    "description": "Optional notes about what was wrong",
+                    "default": "",
+                },
+            },
+            "required": [
+                "gitlab_ci", "original_output", "corrected_output",
+            ],
+        },
+    ),
 ]
 
 
@@ -215,6 +307,28 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     elif name == "index_stats":
         result = store.stats()
+
+    elif name == "confidence_score":
+        tool = ConfidenceScoreTool(store)
+        result = tool.run(
+            gitlab_ci=arguments["gitlab_ci"],
+            github_actions=arguments["github_actions"],
+        )
+
+    elif name == "suggest_workflow_split":
+        tool = SuggestWorkflowSplitTool(store)
+        result = tool.run(
+            gitlab_ci=arguments["gitlab_ci"],
+        )
+
+    elif name == "record_feedback":
+        tool = RecordFeedbackTool()
+        result = tool.run(
+            gitlab_ci=arguments["gitlab_ci"],
+            original_output=arguments["original_output"],
+            corrected_output=arguments["corrected_output"],
+            notes=arguments.get("notes", ""),
+        )
 
     else:
         result = {"error": f"Unknown tool: {name}"}

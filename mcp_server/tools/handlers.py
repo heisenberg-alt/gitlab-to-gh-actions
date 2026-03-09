@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any, Optional
 
 import yaml
 
 from mcp_server.embeddings import (
+    DATA_DIR,
+    GITLAB_CI_DIR,
     VectorStore,
     extract_patterns_from_yaml,
     yaml_to_text_description,
-    CONVERSIONS_DIR,
-    GITLAB_CI_DIR,
 )
 
 logger = logging.getLogger(__name__)
@@ -165,7 +164,8 @@ class ValidateAgainstCorpusTool:
             )
             if not has_services:
                 warnings.append(
-                    "GitLab CI uses services but no services found in GitHub Actions output"
+                    "GitLab CI uses services but no"
+                    " services found in GitHub Actions output"
                 )
                 suggestions.append(
                     "Add services: section to jobs that need database/cache containers"
@@ -185,7 +185,8 @@ class ValidateAgainstCorpusTool:
             gh_str = github_actions.lower()
             if "upload-artifact" not in gh_str and "download-artifact" not in gh_str:
                 warnings.append(
-                    "GitLab CI uses artifacts but no upload/download-artifact actions found"
+                    "GitLab CI uses artifacts but no"
+                    " upload/download-artifact actions found"
                 )
                 suggestions.append(
                     "Add actions/upload-artifact@v4 and actions/download-artifact@v4"
@@ -209,7 +210,8 @@ class ValidateAgainstCorpusTool:
         # Compare against similar conversion pairs
         if similar_pairs:
             suggestions.append(
-                f"Found {len(similar_pairs)} similar conversion(s) in corpus for reference"
+                f"Found {len(similar_pairs)} similar"
+                " conversion(s) in corpus for reference"
             )
             confidence += 0.05 * len(similar_pairs)
 
@@ -338,11 +340,11 @@ class SuggestGitHubActionTool:
 
         # Also detect from script content
         content_lower = gitlab_snippet.lower()
-        if "npm" in content_lower or "yarn" in content_lower or "node" in content_lower:
+        if any(k in content_lower for k in ("npm", "yarn", "node")):
             patterns.append("node")
-        if "pip" in content_lower or "python" in content_lower or "pytest" in content_lower:
+        if any(k in content_lower for k in ("pip", "python", "pytest")):
             patterns.append("python")
-        if "test" in content_lower or "pytest" in content_lower or "jest" in content_lower:
+        if any(k in content_lower for k in ("test", "pytest", "jest")):
             patterns.append("testing")
 
         suggestions: list[dict[str, Any]] = []
@@ -371,4 +373,266 @@ class SuggestGitHubActionTool:
             "detected_patterns": patterns,
             "suggested_actions": suggestions,
             "total_suggestions": len(suggestions),
+        }
+
+
+class ConfidenceScoreTool:
+    """Score individual jobs on conversion confidence using RAG."""
+
+    def __init__(self, store: VectorStore) -> None:
+        self.store = store
+
+    def run(
+        self,
+        gitlab_ci: str,
+        github_actions: str,
+    ) -> dict[str, Any]:
+        try:
+            gl_data = yaml.safe_load(gitlab_ci)
+        except yaml.YAMLError:
+            return {"jobs": [], "overall": 0.0}
+
+        if not isinstance(gl_data, dict):
+            return {"jobs": [], "overall": 0.0}
+
+        try:
+            gh_data = yaml.safe_load(github_actions)
+        except yaml.YAMLError:
+            gh_data = {}
+
+        gh_jobs = (
+            gh_data.get("jobs", {})
+            if isinstance(gh_data, dict) else {}
+        )
+
+        global_keys = {
+            "stages", "variables", "include", "default",
+            "workflow", "image", "services", "before_script",
+            "after_script", "cache",
+        }
+
+        job_scores: list[dict[str, Any]] = []
+        for key, value in gl_data.items():
+            if key in global_keys or not isinstance(value, dict):
+                continue
+            if key.startswith("."):
+                continue
+
+            score = self._score_job(key, value, gh_jobs)
+            job_scores.append(score)
+
+        overall = (
+            sum(j["confidence"] for j in job_scores) / len(job_scores)
+            if job_scores else 0.0
+        )
+
+        return {
+            "jobs": job_scores,
+            "overall": round(overall, 2),
+            "total_jobs": len(job_scores),
+        }
+
+    def _score_job(
+        self,
+        name: str,
+        gl_job: dict[str, Any],
+        gh_jobs: dict[str, Any],
+    ) -> dict[str, Any]:
+        confidence = 0.9
+        flags: list[str] = []
+
+        # Check if job exists in GitHub output
+        if name not in gh_jobs:
+            confidence -= 0.3
+            flags.append("job not found in GitHub Actions output")
+
+        # Penalise complex features
+        complex_keys = {
+            "rules": 0.1, "trigger": 0.15,
+            "include": 0.2, "extends": 0.05,
+            "parallel": 0.05, "resource_group": 0.05,
+        }
+        for feature, penalty in complex_keys.items():
+            if feature in gl_job:
+                confidence -= penalty
+                flags.append(f"uses {feature}")
+
+        # Check RAG for similar patterns
+        snippet = yaml.dump({name: gl_job}, default_flow_style=False)
+        description = yaml_to_text_description(snippet)
+        similar = self.store.search(query=description, n_results=1)
+        if similar:
+            best_sim = 1.0 - similar[0].get("distance", 1.0)
+            if best_sim > 0.7:
+                confidence += 0.05
+            flags.append(
+                f"corpus similarity: {round(best_sim, 2)}"
+            )
+        else:
+            confidence -= 0.05
+            flags.append("no similar pattern in corpus")
+
+        confidence = max(0.0, min(1.0, confidence))
+
+        return {
+            "job": name,
+            "confidence": round(confidence, 2),
+            "flags": flags,
+        }
+
+
+class SuggestWorkflowSplitTool:
+    """Recommend splitting a large pipeline into multiple workflows."""
+
+    # Stage categories that map to separate workflow concerns
+    WORKFLOW_CATEGORIES: dict[str, list[str]] = {
+        "ci": [
+            "build", "compile", "install", "deps",
+            "lint", "test", "check", "verify",
+        ],
+        "deploy": [
+            "deploy", "release", "publish", "production",
+            "staging", "review",
+        ],
+        "security": [
+            "sast", "dast", "security", "scan",
+            "vulnerability", "audit",
+        ],
+        "pages": ["pages", "docs", "documentation"],
+    }
+
+    def __init__(self, store: VectorStore) -> None:
+        self.store = store
+
+    def run(self, gitlab_ci: str) -> dict[str, Any]:
+        try:
+            data = yaml.safe_load(gitlab_ci)
+        except yaml.YAMLError:
+            return {"should_split": False, "reason": "invalid YAML"}
+
+        if not isinstance(data, dict):
+            return {"should_split": False, "reason": "not a mapping"}
+
+        global_keys = {
+            "stages", "variables", "include", "default",
+            "workflow", "image", "services", "before_script",
+            "after_script", "cache",
+        }
+        jobs = {
+            k: v for k, v in data.items()
+            if k not in global_keys
+            and isinstance(v, dict)
+            and not k.startswith(".")
+        }
+
+        if len(jobs) <= 4:
+            return {
+                "should_split": False,
+                "reason": f"only {len(jobs)} jobs — single workflow is fine",
+                "workflows": [{"name": "ci.yml", "jobs": list(jobs.keys())}],
+            }
+
+        # Categorise jobs
+        categorised: dict[str, list[str]] = {}
+        uncategorised: list[str] = []
+        for job_name, job_def in jobs.items():
+            stage = job_def.get("stage", "")
+            placed = False
+            for wf_name, keywords in self.WORKFLOW_CATEGORIES.items():
+                if any(
+                    kw in job_name.lower() or kw in stage.lower()
+                    for kw in keywords
+                ):
+                    categorised.setdefault(wf_name, []).append(job_name)
+                    placed = True
+                    break
+            if not placed:
+                uncategorised.append(job_name)
+
+        # Merge uncategorised into 'ci'
+        if uncategorised:
+            categorised.setdefault("ci", []).extend(uncategorised)
+
+        # Only suggest split if we get 2+ workflow files
+        if len(categorised) < 2:
+            return {
+                "should_split": False,
+                "reason": "all jobs belong to a single category",
+                "workflows": [
+                    {"name": "ci.yml", "jobs": list(jobs.keys())}
+                ],
+            }
+
+        workflows = []
+        for wf_name, wf_jobs in sorted(categorised.items()):
+            workflows.append({
+                "name": f"{wf_name}.yml",
+                "jobs": wf_jobs,
+                "trigger_hint": self._trigger_hint(wf_name),
+            })
+
+        return {
+            "should_split": True,
+            "reason": (
+                f"{len(jobs)} jobs across {len(categorised)} categories"
+            ),
+            "workflows": workflows,
+            "total_jobs": len(jobs),
+        }
+
+    @staticmethod
+    def _trigger_hint(category: str) -> str:
+        hints = {
+            "ci": "on: [push, pull_request]",
+            "deploy": "on: workflow_run (after CI) or workflow_dispatch",
+            "security": "on: [pull_request] or schedule",
+            "pages": "on: push to main",
+        }
+        return hints.get(category, "on: [push]")
+
+
+class RecordFeedbackTool:
+    """Record user corrections for future RAG improvement."""
+
+    FEEDBACK_DIR = DATA_DIR / "feedback"
+
+    def run(
+        self,
+        gitlab_ci: str,
+        original_output: str,
+        corrected_output: str,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        import datetime
+        import hashlib
+
+        self.FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+
+        content_hash = hashlib.sha256(
+            gitlab_ci.encode()
+        ).hexdigest()[:12]
+        ts = datetime.datetime.now(
+            datetime.timezone.utc
+        ).strftime("%Y%m%d_%H%M%S")
+        entry_dir = self.FEEDBACK_DIR / f"{ts}_{content_hash}"
+        entry_dir.mkdir(parents=True, exist_ok=True)
+
+        (entry_dir / "gitlab-ci.yml").write_text(gitlab_ci)
+        (entry_dir / "original.yml").write_text(original_output)
+        (entry_dir / "corrected.yml").write_text(corrected_output)
+
+        meta = {
+            "timestamp": ts,
+            "content_hash": content_hash,
+            "notes": notes,
+            "patterns": extract_patterns_from_yaml(gitlab_ci),
+        }
+        (entry_dir / "metadata.json").write_text(
+            json.dumps(meta, indent=2)
+        )
+
+        return {
+            "recorded": True,
+            "feedback_id": f"{ts}_{content_hash}",
+            "path": str(entry_dir),
         }

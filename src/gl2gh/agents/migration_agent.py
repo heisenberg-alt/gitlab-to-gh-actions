@@ -17,10 +17,10 @@ from gl2gh.utils.yaml_utils import add_yaml_header, validate_yaml_syntax
 
 # RAG support — optional, gracefully degrades if mcp_server is not available
 try:
-    from mcp_server.embeddings import VectorStore, build_index_from_disk
+    from mcp_server.embeddings import build_index_from_disk
     from mcp_server.tools.handlers import (
-        PatternSearchTool,
         ConversionExampleTool,
+        PatternSearchTool,
         SuggestGitHubActionTool,
     )
     _RAG_AVAILABLE = True

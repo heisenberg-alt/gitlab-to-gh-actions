@@ -155,7 +155,11 @@ jobs:
     # -----------------------------------------------------------------------
     {
         "name": "python_complex",
-        "description": "Python CI with services (postgres, redis), matrix builds, extends, Docker, SAST, environments",
+        "description": (
+            "Python CI with services (postgres, redis),"
+            " matrix builds, extends, Docker,"
+            " SAST, environments"
+        ),
         "gitlab_ci": """\
 stages:
   - build
@@ -337,11 +341,7 @@ jobs:
   sast:
     needs: [build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+    if: github.event_name == 'pull_request' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)  # noqa: E501
         with:
           python-version: "3.12"
       - run: pip install bandit safety
@@ -573,7 +573,7 @@ jobs:
   test:
     needs: [lint-frontend, lint-backend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.event_name == 'pull_request' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)  # noqa: E501
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
