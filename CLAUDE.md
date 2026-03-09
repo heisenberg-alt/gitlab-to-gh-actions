@@ -52,7 +52,7 @@ gitlab-to-gh-actions/
 
 ```bash
 # Install in development mode (first time)
-pip install -e ".[dev]"
+uv sync --all-extras
 
 # Run all tests
 pytest

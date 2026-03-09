@@ -38,7 +38,7 @@ An MCP (Model Context Protocol) server that provides **Retrieval-Augmented Gener
 
 ```bash
 cd mcp_server
-pip install -e ".[dev]"
+uv sync --all-extras
 ```
 
 ### 2. Seed the data

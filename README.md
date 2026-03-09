@@ -9,11 +9,11 @@ Convert GitLab CI/CD pipelines to GitHub Actions workflows. Rule-based conversio
 ## Install
 
 ```bash
-pip install -e ".[dev]"
+uv sync --all-extras
 gl2gh --version
 ```
 
-Requires Python 3.11+. Optional: [GitHub CLI](https://cli.github.com/) (`gh`) for repo operations, `GITHUB_TOKEN` for AI mode.
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/). Optional: [GitHub CLI](https://cli.github.com/) (`gh`) for repo operations, `GITHUB_TOKEN` for AI mode.
 
 ## Usage
 
@@ -128,7 +128,7 @@ gl2gh inspect examples/complex.gitlab-ci.yml -v
 ## Contributing
 
 1. Fork and create a feature branch
-2. `pip install -e ".[dev]"`
+2. `uv sync --all-extras`
 3. Make changes, run `pytest`, `ruff check src/ tests/`, `mypy src/gl2gh/`
 4. Submit a PR
 
